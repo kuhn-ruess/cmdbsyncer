@@ -4,6 +4,8 @@
   do and a table with the columns the topic declares. Shared by the page
   (checkmk_config_checks.html) and its print layout
   (checkmk_config_checks_report.html), so both show the same thing.
+  With ``interactive`` set (the page), every topic folds, has its own CSV
+  and PDF export, and a topic with a ``host_action`` offers it on its hosts.
 #}
 {% macro cell(column, value, scope_folder) %}
 {%- if column.kind == 'items' -%}
@@ -60,22 +62,78 @@
 
 {% for section in report.sections %}
 {% set topic = section.topic %}
-<section class="cc-section" id="cc-{{ report.name }}-{{ topic.key }}">
+{% set section_id = 'cc-' ~ report.name ~ '-' ~ topic.key %}
+{% set discover = interactive and can_discover and topic.host_action == 'discovery' and section.findings %}
+{% if interactive %}
+<details class="cc-section" id="{{ section_id }}" {% if section.findings %}open{% endif %}>
+    <summary class="cc-section-title h5">
+{% else %}
+<section class="cc-section" id="{{ section_id }}">
     <h5 class="cc-section-title">
+{% endif %}
         {{ topic.title }}
         {% if section.findings %}
         <span class="badge {{ 'badge-warning' if topic.severity == 'warning' else 'badge-info' }}">{{ section.findings | length }}</span>
         {% else %}
         <span class="badge badge-success">0</span>
         {% endif %}
+{% if interactive %}
+    </summary>
+{% else %}
     </h5>
+{% endif %}
     {% if section.findings %}
     <p class="cc-description">{{ topic.description }}</p>
     <p class="cc-action"><strong>What to do:</strong> {{ topic.action }}</p>
+    {% if interactive %}
+    <form method="POST" action="{{ url_for('.export') }}" class="cc-export mb-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="hidden" name="account" value="{{ report.account }}"/>
+        <input type="hidden" name="checks" value="{{ report.name }}"/>
+        <input type="hidden" name="topic" value="{{ topic.key }}"/>
+        <button type="submit" name="format" value="csv" class="btn btn-sm btn-outline-secondary">
+            <i class="fa fa-file-text-o"></i> CSV
+        </button>
+        <button type="submit" name="format" value="pdf" class="btn btn-sm btn-outline-secondary"
+                {% if not pdf_available %}disabled title="{{ pdf_missing }}"{% endif %}>
+            <i class="fa fa-file-pdf-o"></i> PDF
+        </button>
+        <small class="cc-muted ml-1">This topic only; the check runs again for the export.</small>
+    </form>
+    {% endif %}
+    {% if discover %}
+    <form method="POST" action="{{ url_for('.discovery') }}" class="cc-discovery card app-card mb-2"
+          id="{{ section_id }}-discovery">
+        <div class="card-body py-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <input type="hidden" name="account" value="{{ report.account }}"/>
+            <strong>Run a service discovery on the selected hosts</strong>
+            <div>
+                {% for key, label in discovery_options %}
+                <label class="mr-3 mb-0">
+                    <input type="checkbox" name="{{ key }}" value="1"
+                           {% if key != 'remove_vanished_services' %}checked{% endif %}> {{ label }}
+                </label>
+                {% endfor %}
+                <label class="mr-3 mb-0">
+                    <input type="checkbox" name="activate" value="1"> Activate changes when done
+                </label>
+            </div>
+            <button type="submit" class="btn btn-sm btn-primary mt-1">
+                <i class="fa fa-search-plus"></i> Start discovery
+            </button>
+            <span class="cc-discovery-result ml-2"></span>
+        </div>
+    </form>
+    {% endif %}
     <div class="table-responsive">
         <table class="table table-sm cc-table">
             <thead>
                 <tr>
+                    {% if discover %}
+                    <th><input type="checkbox" class="cc-hosts-all" checked title="Select all"
+                               data-form="{{ section_id }}-discovery"></th>
+                    {% endif %}
                     <th>#</th>
                     {% for column in topic.columns %}<th>{{ column.label }}</th>{% endfor %}
                 </tr>
@@ -83,6 +141,10 @@
             <tbody>
                 {% for finding in section.findings %}
                 <tr>
+                    {% if discover %}
+                    <td><input type="checkbox" name="hosts" value="{{ finding['values'].host }}"
+                               form="{{ section_id }}-discovery" checked></td>
+                    {% endif %}
                     <td>{{ loop.index }}</td>
                     {% for column in topic.columns %}
                     <td>{{ cell(column, finding['values'][column.key], finding['values'].get('folder')) }}</td>
@@ -95,5 +157,9 @@
     {% else %}
     <p class="cc-muted">No findings.</p>
     {% endif %}
+{% if interactive %}
+</details>
+{% else %}
 </section>
+{% endif %}
 {% endfor %}

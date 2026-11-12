@@ -3,6 +3,8 @@ Building blocks shared by every Checkmk configuration check: the check base
 class, the finding a check reports and the helpers to read rules.
 """
 import ast
+import csv
+import io
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -29,6 +31,8 @@ class Topic:
     One kind of problem a check reports. The report gets a section per
     topic: ``title`` and the number of findings as heading, ``description``
     (what it means), ``action`` (what to do) and a table with ``columns``.
+    ``host_action`` names what the page offers for the hosts of the topic
+    (``discovery``); their findings hold the host name as value ``host``.
     """
     key: str
     title: str
@@ -36,6 +40,7 @@ class Topic:
     action: str
     columns: tuple
     severity: str = SEVERITY_WARNING
+    host_action: str = ''
 
 
 @dataclass
@@ -102,6 +107,74 @@ class ConfigCheck:
             'warnings': sum(len(section['findings']) for section in sections
                             if section['topic'].severity == SEVERITY_WARNING),
         }
+
+
+def items_text(items, scope_folder=None):
+    """A list of rule items as lines of text (see ``Finding``)."""
+    lines = []
+    for item in items or []:
+        head = ' '.join(part for part in (item.get('service'), item.get('rule'))
+                        if part)
+        detail = item.get('detail', '')
+        if item.get('folder') and item.get('folder') != scope_folder:
+            detail += f", folder {item['folder']}"
+        if item.get('rule_id'):
+            detail += f", rule {item['rule_id']}"
+        lines.append(f"{head}: {detail}" if head else detail)
+    return '\n'.join(lines)
+
+
+def cell_text(column, finding):
+    """The text of one column of a finding, for the PDF and the CSV."""
+    value = finding.values.get(column.key)
+    if column.kind == 'items':
+        return items_text(value, finding.values.get('folder'))
+    return '' if value is None else str(value)
+
+
+def export_filename(account, topic=None, extension='pdf', created=None):
+    """
+    ``checkmk-config-checks-<account>[-<topic>]-<date>.<extension>``,
+    safe for a download.
+    """
+    # pylint: disable=import-outside-toplevel
+    from werkzeug.utils import secure_filename
+    created = created or datetime.now()
+    middle = f"{account}-{topic}" if topic else account
+    name = f"checkmk-config-checks-{middle}-{created:%Y-%m-%d}.{extension}"
+    return secure_filename(name) \
+        or f"checkmk-config-checks-{created:%Y-%m-%d}.{extension}"
+
+
+def topic_report(report, topic_key):
+    """
+    ``report`` cut to the section of the topic ``topic_key``, for the
+    export of one topic. None when the report has no such topic.
+    """
+    for section in report['sections']:
+        if section['topic'].key == topic_key:
+            return {**report,
+                    'title': f"{report['title']}: {section['topic'].title}",
+                    'sections': [section],
+                    'total': len(section['findings']),
+                    'warnings': len(section['findings'])
+                                if section['topic'].severity == SEVERITY_WARNING else 0}
+    return None
+
+
+def section_csv(section):
+    """
+    One topic of a report as CSV that opens straight in Excel: a UTF-8
+    BOM, a ``sep=;`` line, ``;`` between the columns and CRLF line ends.
+    """
+    topic = section['topic']
+    buffer = io.StringIO()
+    buffer.write('\ufeffsep=;\r\n')
+    writer = csv.writer(buffer, delimiter=';', lineterminator='\r\n')
+    writer.writerow([column.label for column in topic.columns])
+    for finding in section['findings']:
+        writer.writerow([cell_text(column, finding) for column in topic.columns])
+    return buffer.getvalue()
 
 
 def parse_rule(cmk_rule):

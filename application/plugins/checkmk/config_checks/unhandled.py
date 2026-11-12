@@ -55,7 +55,7 @@ TOPIC_DISCOVERY = Topic(
     "vanished services or changed host labels.",
     "Run a service discovery on the hosts and accept the changes, or "
     "disable the services that should not be monitored.",
-    _HOST_COLUMNS)
+    _HOST_COLUMNS, host_action='discovery')
 TOPIC_BY_TYPE = Topic(
     'by_type', 'Service problems by check type',
     "Every other service that is WARN, CRIT or UNKNOWN, one row per check "

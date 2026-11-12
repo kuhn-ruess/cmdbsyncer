@@ -8,7 +8,9 @@
         the site's setup and lists the problems it finds there, for example
         HTTP checks that check the same URL twice. Running a check never
         changes anything in Checkmk. <strong>Export PDF</strong> downloads the
-        result as a PDF report.
+        result as a PDF report; every topic folds and exports on its own as
+        CSV or PDF. Hosts with a pending service discovery can be discovered
+        right from their topic.
     </p>
 
     {% if not accounts %}
@@ -60,6 +62,7 @@
         </div>
     </form>
 
+    {% set interactive = true %}
     {% for report in reports or [] %}
     <div class="card app-card mb-4">
         <div class="card-header">
@@ -79,6 +82,7 @@
     .cc-total td { font-weight: 600; }
     .cc-section { margin-top: 1.5rem; }
     .cc-section-title { border-bottom: 1px solid currentColor; padding-bottom: 0.25rem; }
+    summary.cc-section-title { cursor: pointer; }
     .cc-items { padding-left: 1rem; margin-bottom: 0; }
     .cc-muted { opacity: 0.7; font-size: 0.875em; }
     .cc-state { color: #1a1a1a; }
@@ -88,4 +92,53 @@
     .cc-state-down { background: #dc3545; color: #fff; }
     .cc-state-unreachable { background: #fd7e14; }
 </style>
+<script>
+(function () {
+    // A link of the summary opens its folded topic
+    function openTarget() {
+        var target = location.hash && document.getElementById(location.hash.slice(1));
+        if (target && target.tagName === 'DETAILS') { target.open = true; }
+    }
+    window.addEventListener('hashchange', openTarget);
+    openTarget();
+
+    document.querySelectorAll('.cc-hosts-all').forEach(function (all) {
+        all.addEventListener('change', function () {
+            document.querySelectorAll('input[name="hosts"][form="' + all.dataset.form + '"]')
+                .forEach(function (box) { box.checked = all.checked; });
+        });
+    });
+
+    // The discovery starts in Checkmk; the page stays with its results
+    document.querySelectorAll('form.cc-discovery').forEach(function (form) {
+        var result = form.querySelector('.cc-discovery-result');
+        var button = form.querySelector('button[type="submit"]');
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            var hosts = document.querySelectorAll(
+                'input[name="hosts"][form="' + form.id + '"]:checked').length;
+            if (!confirm('Run a service discovery on ' + hosts + ' host(s) in Checkmk?')) {
+                return;
+            }
+            button.disabled = true;
+            result.className = 'cc-discovery-result ml-2 text-muted';
+            result.textContent = 'Starting…';
+            fetch(form.action, {method: 'POST', body: new FormData(form),
+                                credentials: 'same-origin'})
+                .then(function (response) { return response.json(); })
+                .then(function (data) {
+                    result.className = 'cc-discovery-result ml-2 ' +
+                        (data.ok ? 'text-success' : 'text-danger');
+                    result.textContent = data.message;
+                    button.disabled = data.ok;
+                })
+                .catch(function (exp) {
+                    result.className = 'cc-discovery-result ml-2 text-danger';
+                    result.textContent = 'Could not start: ' + exp;
+                    button.disabled = false;
+                });
+        });
+    });
+})();
+</script>
 {% endblock %}

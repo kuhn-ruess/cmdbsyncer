@@ -3638,30 +3638,95 @@ class CheckmkConfigChecksView(_DataQualityAccess, BaseView):
         account, names, reports, failed = self._run()
         if failed:
             return failed
+        # pylint: disable-next=import-outside-toplevel
+        from .config_checks.discovery import OPTIONS
         return self.render('admin/checkmk_config_checks.html',
                            accounts=self._accounts(), checks=get_checks(),
                            selected_account=account, selected_checks=names,
-                           reports=reports, **self._pdf_state())
+                           reports=reports, discovery_options=OPTIONS,
+                           can_discover=current_user.has_right('checkmk'),
+                           **self._pdf_state())
 
-    @expose('/report', methods=['POST'])
-    def report(self):
-        """The same checks as a PDF download in the syncer design."""
+    def _pdf(self, reports, account, filename):
+        """``reports`` as PDF download in the syncer design"""
         # pylint: disable=import-outside-toplevel
         import os
         from flask import Response
         from .config_checks import PDF_MISSING
         try:
-            from .config_checks.pdf import render_pdf, pdf_filename
+            from .config_checks.pdf import render_pdf
         except ImportError:
             flash(PDF_MISSING, 'error')
             return redirect(self.get_url('.index'))
-        account, _names, reports, failed = self._run()
-        if failed:
-            return failed
         pdf = render_pdf(
             reports, account,
             brand_color=app.config.get('STYLE_NAV_BACKGROUND_COLOR'),
             logo_path=os.path.join(app.root_path, 'static', 'logo_white.png'))
         return Response(pdf, mimetype='application/pdf', headers={
-            'Content-Disposition':
-                f'attachment; filename="{pdf_filename(account)}"'})
+            'Content-Disposition': f'attachment; filename="{filename}"'})
+
+    @expose('/report', methods=['POST'])
+    def report(self):
+        """The same checks as a PDF download in the syncer design."""
+        # pylint: disable=import-outside-toplevel
+        from .config_checks.base import export_filename
+        account, _names, reports, failed = self._run()
+        if failed:
+            return failed
+        return self._pdf(reports, account, export_filename(account))
+
+    @expose('/export', methods=['POST'])
+    def export(self):
+        """
+        One topic of one check as CSV or PDF. The check runs again, like
+        the PDF export of the whole page.
+        """
+        # pylint: disable=import-outside-toplevel
+        from flask import Response
+        from .config_checks.base import export_filename, section_csv, topic_report
+        account, _names, reports, failed = self._run()
+        if failed:
+            return failed
+        topic = request.form.get('topic', '')
+        report = topic_report(reports[0], topic) if reports else None
+        if report is None:
+            flash(f"Unknown topic {topic}", 'error')
+            return redirect(self.get_url('.index'))
+        name = f"{report['name']}-{topic}"
+        if request.form.get('format') == 'csv':
+            return Response(section_csv(report['sections'][0]),
+                            mimetype='text/csv; charset=utf-8', headers={
+                'Content-Disposition': 'attachment; filename="'
+                f'{export_filename(account, name, "csv")}"'})
+        return self._pdf([report], account, export_filename(account, name))
+
+    @expose('/discovery', methods=['POST'])
+    def discovery(self):
+        """
+        Start a service discovery on the hosts picked in a topic. Needs the
+        full Checkmk right: unlike the checks, it changes the site.
+        """
+        # pylint: disable=import-outside-toplevel
+        from requests.exceptions import RequestException
+        from .cmk2 import CmkException
+        from .config_checks import discovery
+        if not current_user.has_right('checkmk'):
+            return {'ok': False, 'message': 'A service discovery needs the Checkmk right'}
+        account = request.form.get('account', '')
+        if account not in self._accounts():
+            return {'ok': False, 'message': 'Select a Checkmk account first'}
+        hosts = list(dict.fromkeys(host.strip() for host in request.form.getlist('hosts')
+                                   if host.strip()))
+        if not hosts:
+            return {'ok': False, 'message': 'Select at least one host'}
+        options = [key for key, _label in discovery.OPTIONS if request.form.get(key)]
+        try:
+            job_id = discovery.run(account, hosts, options,
+                                   bool(request.form.get('activate')),
+                                   current_user.email)
+        except (CmkException, RequestException) as exp:
+            return {'ok': False, 'message': f"Checkmk did not start the discovery: {exp}"}
+        return {'ok': True, 'message': (
+            f"Service discovery started on {len(hosts)} host(s), Checkmk job "
+            f"{job_id}. The result is logged under Settings, Log; the "
+            "Check_MK Discovery service shows it on its next run.")}

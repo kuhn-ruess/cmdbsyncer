@@ -15,7 +15,7 @@ from datetime import datetime
 from fpdf import FPDF
 from fpdf.fonts import FontFace
 
-from .base import SEVERITY_WARNING
+from .base import SEVERITY_WARNING, cell_text, export_filename
 
 DEFAULT_BRAND = (44, 62, 80)
 TEXT = (44, 62, 80)
@@ -54,29 +54,6 @@ def parse_color(value, default=DEFAULT_BRAND):
             if len(value) == 6 else default
     except ValueError:
         return default
-
-
-def items_text(items, scope_folder=None):
-    """A list of rule items as lines of text (see ``Finding``)."""
-    lines = []
-    for item in items or []:
-        head = ' '.join(part for part in (item.get('service'), item.get('rule'))
-                        if part)
-        detail = item.get('detail', '')
-        if item.get('folder') and item.get('folder') != scope_folder:
-            detail += f", folder {item['folder']}"
-        if item.get('rule_id'):
-            detail += f", rule {item['rule_id']}"
-        lines.append(f"{head}: {detail}" if head else detail)
-    return '\n'.join(lines)
-
-
-def cell_text(column, finding):
-    """The printable text of one column of a finding."""
-    value = finding.values.get(column.key)
-    if column.kind == 'items':
-        return items_text(value, finding.values.get('folder'))
-    return '' if value is None else str(value)
 
 
 class ReportPDF(FPDF):
@@ -220,7 +197,9 @@ def render_pdf(reports, account, brand_color=None, logo_path=None,
                                    for label, value in report['stats']),
                    size=8, color=MUTED)
         pdf.ln(2)
-        _summary(pdf, report)
+        # A report cut to one topic needs no summary of the topics
+        if len(report['sections']) > 1:
+            _summary(pdf, report)
         for section in report['sections']:
             _section(pdf, section)
     return bytes(pdf.output())
@@ -228,8 +207,4 @@ def render_pdf(reports, account, brand_color=None, logo_path=None,
 
 def pdf_filename(account, created=None):
     """``checkmk-config-checks-<account>-<date>.pdf``, safe for a download."""
-    # pylint: disable=import-outside-toplevel
-    from werkzeug.utils import secure_filename
-    created = created or datetime.now()
-    name = f"checkmk-config-checks-{account}-{created:%Y-%m-%d}.pdf"
-    return secure_filename(name) or f"checkmk-config-checks-{created:%Y-%m-%d}.pdf"
+    return export_filename(account, created=created)

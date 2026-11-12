@@ -3,7 +3,8 @@ Checkmk configuration checks.
 
 Each check reads part of a Checkmk site's setup over the REST API and returns
 a list of problems found in it. The checks only read, they never change,
-delete or activate anything in Checkmk.
+delete or activate anything in Checkmk. The one action that writes is the
+service discovery the page offers on the hosts of a topic (``discovery``).
 
 A check is a subclass of :class:`ConfigCheck` registered with
 :func:`register_check`. The GUI lists every registered check, so adding a
