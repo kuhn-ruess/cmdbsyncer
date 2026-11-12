@@ -582,15 +582,30 @@ def _format_date(_v, _c, m, p):
 
 
 def _format_log(_v, _c, m, _p):
-    """Render the log inline as a fixed-height scrollable pre block."""
+    """
+    Render the log inline as a fixed-height scrollable pre block. A
+    running run gets it also while empty: the detail page appends to it.
+    """
     text = m.log or ""
-    if not text:
+    if not text and m.status != 'running':
         return ""
     return Markup(
-        '<pre style="max-height:240px;overflow:auto;background:#111;'
+        '<pre data-run-field="log" style="max-height:240px;overflow:auto;background:#111;'
         'color:#ddd;padding:8px;border-radius:4px;font-size:11px;'
         f'white-space:pre-wrap;">{escape(text)}</pre>'
     )
+
+
+def _live(formatter=None):
+    """
+    A detail formatter that marks its value for the live update of a
+    running run, see ``AnsibleRunStatsView.progress``.
+    """
+    def _format(view, context, model, name):
+        value = formatter(view, context, model, name) if formatter \
+            else escape('' if getattr(model, name) is None else getattr(model, name))
+        return Markup(f'<span data-run-field="{name}">{value}</span>')
+    return _format
 
 
 class AnsibleRunStatsView(DefaultModelView):
@@ -651,6 +666,7 @@ class AnsibleRunStatsView(DefaultModelView):
             ('ui', 'UI'),
             ('rule', 'Rule'),
             ('cli', 'CLI'),
+            ('cron', 'Cron'),
         ]),
     )
 
@@ -677,15 +693,45 @@ class AnsibleRunStatsView(DefaultModelView):
 
     column_formatters_detail = {
         'started_at': _format_date,
-        'ended_at': _format_date,
-        'status': _format_status,
+        'ended_at': _live(_format_date),
+        'status': _live(_format_status),
+        'exit_code': _live(),
+        'pid': _live(),
         'log': _format_log,
     }
 
     can_view_details = True
-    # Auto-reloads the detail page while the run is still 'running' so the
-    # log and final status appear without a manual refresh.
+    # While the run is 'running' the detail page polls ``progress`` and
+    # appends the new log lines, instead of reloading the whole page.
     details_template = 'admin/ansible_run_details.html'
+
+    @expose('/progress/<run_id>')
+    def progress(self, run_id):
+        """
+        The state of a run for the live detail page. ``since`` is the log
+        length the page has: while running, only the log after it comes
+        back; once ended, the whole log, which may have been replaced by an
+        error or got a hint appended.
+        """
+        stats = AnsibleRunStats.objects(id=run_id).only(
+            'status', 'log', 'ended_at', 'exit_code', 'pid').first()
+        if stats is None:
+            abort(404)
+        log = stats.log or ''
+        running = stats.status == 'running'
+        since = request.args.get('since', '0')
+        since = int(since) if since.isdigit() else 0
+        whole = not running or since > len(log)
+        return {
+            'running': running,
+            'status': str(_format_status(None, None, stats, 'status')),
+            'ended_at': _format_date(None, None, stats, 'ended_at'),
+            'exit_code': '' if stats.exit_code is None else stats.exit_code,
+            'pid': '' if stats.pid is None else stats.pid,
+            'log': log if whole else log[since:],
+            'whole': whole,
+            'length': len(log),
+        }
 
     @expose('/cancel/<run_id>', methods=('POST',))
     def cancel(self, run_id):

@@ -1,13 +1,13 @@
 {% extends 'admin/model/details.html' %}
 
-{# Auto-refresh the run detail page while the playbook is still running so
-   the captured log and final status appear on their own. The script is
-   only emitted while status == 'running', so reloading stops the moment
-   the run finishes. #}
+{# While the playbook is still running, the page asks the progress endpoint
+   for the new log lines and the state of the run and updates them in
+   place, instead of reloading the whole page. The script is only emitted
+   while status == 'running' and stops once the run ended. #}
 {% block navlinks %}
   {{ super() }}
   {% if model.status == 'running' %}
-  <form method="POST" style="display:inline; margin-left:12px;"
+  <form method="POST" style="display:inline; margin-left:12px;" id="run-cancel"
         action="{{ url_for('ansiblerunstats.cancel', run_id=model.id) }}"
         onsubmit="return confirm('Cancel this running playbook?');">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -28,7 +28,54 @@
   </script>
   {% if model.status == 'running' %}
   <script {{ admin_csp_nonce_attribute }}>
-    setTimeout(function () { window.location.reload(); }, 3000);
+    (function () {
+      var url = "{{ url_for('ansiblerunstats.progress', run_id=model.id) }}";
+      var log = document.querySelector('[data-run-field="log"]');
+      var length = log ? log.textContent.length : 0;
+
+      function field(name) {
+        return document.querySelector('[data-run-field="' + name + '"]');
+      }
+      function set(name, value) {
+        var element = field(name);
+        if (element) { element.textContent = value; }
+      }
+
+      function poll() {
+        fetch(url + '?since=' + length, {credentials: 'same-origin'})
+          .then(function (response) {
+            if (!response.ok) { throw new Error(response.status); }
+            return response.json();
+          })
+          .then(function (data) {
+            if (log) {
+              // Follow the output only when the reader is at the bottom
+              var atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 24;
+              if (data.whole) {
+                log.textContent = data.log;
+              } else if (data.log) {
+                log.appendChild(document.createTextNode(data.log));
+              }
+              if (atBottom) { log.scrollTop = log.scrollHeight; }
+            }
+            length = data.length;
+            // Built by the server's status formatter, escaped there
+            var status = field('status');
+            if (status) { status.innerHTML = data.status; }
+            set('ended_at', data.ended_at);
+            set('exit_code', data.exit_code);
+            set('pid', data.pid);
+            if (data.running) {
+              setTimeout(poll, 2000);
+            } else {
+              var cancel = document.getElementById('run-cancel');
+              if (cancel) { cancel.remove(); }
+            }
+          })
+          .catch(function () { setTimeout(poll, 5000); });
+      }
+      setTimeout(poll, 2000);
+    })();
   </script>
   {% endif %}
 {% endblock %}
