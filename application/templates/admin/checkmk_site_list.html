@@ -1,0 +1,15 @@
+{% extends 'admin/model/list.html' %}
+
+{#- In the default order, sorted by settings, every settings entry gets a
+    header row above its sites. The header row takes the <tr> the parent
+    template opened for the site, the site follows in a <tr> of its own. -#}
+{% block list_row scoped %}
+  {% if sort_column is none and (loop.first or loop.previtem.settings_master != row.settings_master) %}
+    <td colspan="{{ list_columns|length + 2 }}" class="app-group-row">
+      <strong>Settings: {{ row.settings_master.name if row.settings_master else '-' }}</strong>
+    </td>
+  </tr>
+  <tr>
+  {% endif %}
+  {{ super() }}
+{% endblock %}

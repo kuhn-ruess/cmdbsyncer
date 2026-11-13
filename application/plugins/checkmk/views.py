@@ -1514,7 +1514,10 @@ class CheckmkSiteView(DefaultModelView):
         'name': get_rule_json
     }
 
-    column_default_sort = "name"
+    # Sorted by settings first, so the list template can group the sites
+    # of one settings entry under a header row.
+    list_template = 'admin/checkmk_site_list.html'
+    column_default_sort = [('settings_master', False), ('name', False)]
 
 
     column_editable_list = [
