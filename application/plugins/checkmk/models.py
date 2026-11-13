@@ -883,6 +883,9 @@ class CheckmkSite(db.Document):
 
 # Superseded by the (name, server_address) unique index.
 register_stale_index('checkmk_site', 'name_1')
+# Left over from before 2024-10, when a server address was unique; it
+# refuses a second site on the same server.
+register_stale_index('checkmk_site', 'server_address_1')
 #.
 #   .-- Checkmk BI Aggregations
 
