@@ -15,9 +15,14 @@ class SyncSites(Plugin):
     (for example a production and a test site).
     """
 
+    name = "Checkmk Sites Inventory"
+    source = "ansible_jobs"
+
     def __init__(self, settings=None):
         super().__init__()
         self.settings = settings
+        if settings is not None:
+            self.log_details.append(('settings', settings.name))
 
     def _sites(self, **filters):
         """Enabled sites of enabled settings, limited to the settings when given"""
@@ -97,6 +102,7 @@ class SyncSites(Plugin):
             hostname = site.server_address
             data['_meta']['hostvars'][hostname] = self.get_site_data(site)
             data['all']['hosts'].append(hostname)
+        self.name = f"Checkmk Sites Inventory: {len(data['all']['hosts'])} sites"
         return data
 
 
@@ -110,5 +116,7 @@ class SyncSites(Plugin):
         for site in self._sites(server_address=hostname):
             pass
         if site is None:
+            self.name = f"Checkmk Sites Inventory: {hostname} not found"
             return False
+        self.name = f"Checkmk Sites Inventory: {hostname}, site {site.name}"
         return self.get_site_data(site)

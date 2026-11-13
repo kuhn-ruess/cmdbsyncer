@@ -39,6 +39,18 @@ class SitesOfSettingsTest(unittest.TestCase):
         self.assertEqual(inventory['all']['hosts'], ['srv01'])
         self.assertEqual(inventory['_meta']['hostvars']['srv01'], {'cmk_site': 'test'})
 
+    def test_log_entry_names_what_was_served(self):
+        with patch.object(site_syncer, 'CheckmkSite') as model:
+            model.objects.return_value = [self._site('test', 'srv01')]
+            syncer = self._syncer(MagicMock())
+            syncer.get_full_inventory()
+            self.assertEqual(syncer.name, "Checkmk Sites Inventory: 1 sites")
+            syncer.get_host_inventory('srv01')
+            self.assertEqual(syncer.name, "Checkmk Sites Inventory: srv01, site test")
+            model.objects.return_value = []
+            syncer.get_host_inventory('srv09')
+            self.assertEqual(syncer.name, "Checkmk Sites Inventory: srv09 not found")
+
     def test_without_settings_sites_of_enabled_settings(self):
         enabled = [MagicMock()]
         with patch.object(site_syncer, 'CheckmkSite') as model, \

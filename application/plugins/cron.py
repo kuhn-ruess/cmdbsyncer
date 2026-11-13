@@ -209,7 +209,7 @@ def jobs():  # pylint: disable=too-many-branches,too-many-statements
     Run all configured Jobs
     """
     checked = 0
-    started = 0
+    started = []
     for job in CronGroup.objects(enabled=True).order_by('sort_field'):
         checked += 1
         stats = get_stats(job.name)
@@ -242,7 +242,7 @@ def jobs():  # pylint: disable=too-many-branches,too-many-statements
             stats.save()
             continue
 
-        started += 1
+        started.append(job.name)
         print('-------------------------------------------------------------')
         print(f"{CC.HEADER} Running Group {job.name} {CC.ENDC}")
         stats.is_running = True
@@ -317,6 +317,10 @@ def jobs():  # pylint: disable=too-many-branches,too-many-statements
     # One entry per pass, including the passes where nothing was due.
     # Without it a quiet log is ambiguous: a scheduler that stopped
     # firing looks exactly like a schedule with nothing to do.
-    log.log("Cron pass", source="cron",
+    if started:
+        message = f"Cron pass: started {', '.join(started)}"
+    else:
+        message = f"Cron pass: nothing due ({checked} groups checked)"
+    log.log(message, source="cron",
             details=[('groups_checked', checked),
-                     ('groups_started', started)])
+                     ('groups_started', len(started))])
