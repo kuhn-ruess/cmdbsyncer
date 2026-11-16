@@ -274,11 +274,18 @@ class Host(HostLabelsMixin, db.Document):
         else:
             full_filter = db_filter
         now = datetime.datetime.utcnow()
+        reason = 'not seen on import'
         return Host.objects(full_filter).update(
             set__deleted_at=now,
             set__lifecycle_state='archived',
             set__lifecycle_state_changed_at=now,
-            set__delete_reason='not seen on import',
+            set__delete_reason=reason,
+            # The same line soft_delete() writes, newest first
+            __raw__={'$push': {'log': {
+                '$each': [Host.log_line(f"Soft-deleted ({reason})")],
+                '$position': 0,
+                '$slice': app.config['HOST_LOG_LENGTH'],
+            }}},
         )
 
 
@@ -629,8 +636,13 @@ class Host(HostLabelsMixin, db.Document):
             entry (string): Message
         """
         entries = self.log[:app.config['HOST_LOG_LENGTH']-1]
+        self.log = [Host.log_line(entry)] + entries
+
+    @staticmethod
+    def log_line(entry):
+        """A host log entry with the current time in front"""
         date = datetime.datetime.utcnow().strftime(app.config['TIME_STAMP_FORMAT'])
-        self.log = [f"{date} {entry}"] + entries
+        return f"{date} {entry}"
 
     def set_inventory_attributes(self, account_name):
         """
@@ -819,7 +831,7 @@ class Host(HostLabelsMixin, db.Document):
         self.last_import_seen = datetime.datetime.utcnow()
         self.refresh_cached_seen_timestamps()
         if self.deleted_at and self._was_auto_archived():
-            self.restore('active')
+            self.restore('active', reason='seen on import again')
         if not self.lifecycle_state:
             self.lifecycle_state = 'active'
         # Fresh import contradicts an earlier "stale" verdict.
@@ -848,10 +860,11 @@ class Host(HostLabelsMixin, db.Document):
         self.add_log(f"Soft-deleted{suffix}")
         return True
 
-    def restore(self, new_state='active'):
+    def restore(self, new_state='active', reason=None):
         """
         Reverse a `soft_delete`. Clears the deletion bookkeeping and
-        moves the host into `new_state` (defaults to 'active').
+        moves the host into `new_state` (defaults to 'active'). `reason`
+        goes into the host log, like the one of `soft_delete`.
 
         Returns:
             bool: True if the host was deleted before, False otherwise.
@@ -862,7 +875,8 @@ class Host(HostLabelsMixin, db.Document):
         self.delete_reason = None
         if self.lifecycle_state == 'archived':
             self.set_lifecycle_state(new_state)
-        self.add_log(f"Restored to {new_state}")
+        suffix = f" ({reason})" if reason else ''
+        self.add_log(f"Restored to {new_state}{suffix}")
         return True
 
     def _was_auto_archived(self):
