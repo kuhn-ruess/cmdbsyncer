@@ -691,6 +691,43 @@ class SyncServiceNow(Plugin):
                         for x in records],
         }
 
+    def compare_hosts(self, table, hostnames):
+        """
+        Read every record of one table the way the import does and
+        compare the names with `hostnames`, the hosts of the syncer.
+        Names are compared without case, ServiceNow often keeps them in
+        capitals. Changes nothing.
+
+        Without a hostname rewrite only the hostname field is asked for,
+        which keeps the read of a large table short. A rewrite may use
+        any field, so then the field list of the account applies.
+        """
+        fields = None
+        if not self.config.get('rewrite_hostname'):
+            fields = self.config.get('hostname_field') or 'name'
+        in_snow = {}
+        records = unnamed = 0
+        for record in self.get_table(table, fields=fields):
+            records += 1
+            names = self.record_hostnames(self.flatten_record(record))
+            if not names:
+                unnamed += 1
+            for name in names:
+                in_snow.setdefault(name.lower(), name)
+        in_syncer = {name.lower(): name for name in hostnames}
+        return {
+            'url': self.table_url(table),
+            'params': self.table_params(self.page_size(), fields=fields),
+            'limits': self.last_rate_limit or {},
+            'records': records,
+            'unnamed': unnamed,
+            'snow_names': len(in_snow),
+            'syncer_hosts': len(in_syncer),
+            'matched': len(in_snow.keys() & in_syncer.keys()),
+            'missing_in_snow': sorted(in_syncer[x] for x in in_syncer.keys() - in_snow.keys()),
+            'missing_in_syncer': sorted(in_snow[x] for x in in_snow.keys() - in_syncer.keys()),
+        }
+
 #.
 #   .-- Import hosts
     def import_hosts(self):

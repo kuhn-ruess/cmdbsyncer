@@ -106,10 +106,20 @@
                 </div>
             </div>
 
-            <button type="submit" class="btn btn-primary"
+            <button type="submit" name="action" value="query" class="btn btn-primary"
                     {% if not accounts %}disabled{% endif %}>
                 <i class="fa fa-search"></i> Query
             </button>
+            <button type="submit" name="action" value="compare" class="btn btn-secondary ml-2"
+                    {% if not accounts %}disabled{% endif %}>
+                <i class="fa fa-balance-scale"></i> Compare with Syncer
+            </button>
+            <small class="form-text text-muted">
+                Compare reads every record of the table with the query and
+                holds the names against the hosts an export of the syncer
+                would send. Max. results does not apply, a large table
+                takes a while.
+            </small>
         </div>
     </form>
 
@@ -117,6 +127,50 @@
     <div class="alert alert-danger">
         <i class="fa fa-exclamation-triangle"></i> <span style="white-space: pre-line;">{{ error }}</span>
     </div>
+    {% endif %}
+
+    {% if comparison %}
+    <p>
+        Used request: <code>{{ comparison.url }}</code><br/>
+        {% for key, value in comparison.params.items() | sort %}
+        <code>{{ key }}={{ value }}</code>{% if not loop.last %}, {% endif %}
+        {% endfor %}
+    </p>
+
+    <div class="card app-card mb-4">
+        <div class="card-header">Comparison with the Syncer</div>
+        <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+                <tbody>
+                    <tr><th style="width: 40%">Records read from ServiceNow</th>
+                        <td>{{ comparison.records }}</td></tr>
+                    <tr><th>Records without hostname</th>
+                        <td>{{ comparison.unnamed }}</td></tr>
+                    <tr><th>Hostnames in ServiceNow</th>
+                        <td>{{ comparison.snow_names }}</td></tr>
+                    <tr><th>Hosts in the Syncer</th>
+                        <td>{{ comparison.syncer_hosts }}</td></tr>
+                    <tr><th>Found in both</th>
+                        <td><span class="badge badge-success">{{ comparison.matched }}</span></td></tr>
+                    <tr><th>Syncer hosts missing in ServiceNow</th>
+                        <td><span class="badge badge-warning">{{ comparison.missing_in_snow | length }}</span></td></tr>
+                    <tr><th>ServiceNow names without Syncer host</th>
+                        <td><span class="badge badge-secondary">{{ comparison.missing_in_syncer | length }}</span></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% for title, names in [('Syncer hosts missing in ServiceNow', comparison.missing_in_snow),
+                            ('ServiceNow names without Syncer host', comparison.missing_in_syncer)] %}
+    {% if names %}
+    <details class="mb-3">
+        <summary>{{ title }} ({{ names | length }})</summary>
+        <textarea class="form-control mt-2" rows="{{ [names | length, 15] | min }}"
+                  readonly>{{ names | join('\n') }}</textarea>
+    </details>
+    {% endif %}
+    {% endfor %}
     {% endif %}
 
     {% if result %}

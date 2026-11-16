@@ -6,6 +6,7 @@ from flask_admin import BaseView, expose
 from flask_login import current_user
 
 from application.models.account import Account
+from application.models.host import Host
 
 from .syncer import ServiceNowError, SyncServiceNow
 
@@ -56,10 +57,11 @@ class ServiceNowQueryView(BaseView):
             return DEFAULT_LIMIT
 
     @staticmethod
-    def _query(form, limit):
+    def _query(form, limit, compare=False):
         """
         Run one query with the settings of the form. Raises ServiceNowError
-        if it could not be done.
+        if it could not be done. With `compare` the whole table is read
+        and held against the hosts an export would send.
         """
         if not form['table']:
             raise ServiceNowError("No table given")
@@ -81,6 +83,9 @@ class ServiceNowQueryView(BaseView):
             syncer.config['sysparm_display_value'] = form['sysparm_display_value']
             if form['hostname_field']:
                 syncer.config['hostname_field'] = form['hostname_field']
+            if compare:
+                hostnames = Host.get_export_hosts().scalar('hostname')
+                return syncer.compare_hosts(form['table'], hostnames)
             return syncer.query_table(form['table'], limit=limit)
         finally:
             # A query is no sync run, it leaves no log entry behind
@@ -106,10 +111,14 @@ class ServiceNowQueryView(BaseView):
 
         error = None
         result = None
+        comparison = None
         limit = self._limit(form['limit'])
         if args.get('searched'):
             try:
-                result = self._query(form, limit)
+                if args.get('action') == 'compare':
+                    comparison = self._query(form, limit, compare=True)
+                else:
+                    result = self._query(form, limit)
             except ServiceNowError as query_error:
                 error = str(query_error)
 
@@ -119,5 +128,6 @@ class ServiceNowQueryView(BaseView):
             form=form,
             limit=limit,
             result=result,
+            comparison=comparison,
             error=error,
         )

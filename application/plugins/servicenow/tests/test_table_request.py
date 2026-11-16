@@ -317,6 +317,41 @@ class TestImportHosts(unittest.TestCase):
         self.assertEqual(read, ['cmdb_ci_unix_server', 'cmdb_ci_db_instance'])
 
 
+class TestCompareHosts(unittest.TestCase):
+    """Tests for SyncServiceNow.compare_hosts"""
+
+    def _compare(self, records, hostnames, **config):
+        instance = syncer(**config)
+        asked = []
+
+        def get_table(_table, query=None, fields=None):  # pylint: disable=unused-argument
+            asked.append(fields)
+            return records
+        instance.get_table = get_table
+        return instance.compare_hosts('cmdb_ci', hostnames), asked
+
+    def test_names_are_compared_without_case(self):
+        result, _ = self._compare([{'name': 'SRV01'}, {'name': 'srv02'}, {'name': ''}],
+                                   ['srv01', 'srv03'])
+        self.assertEqual(result['records'], 3)
+        self.assertEqual(result['unnamed'], 1)
+        self.assertEqual(result['matched'], 1)
+        self.assertEqual(result['missing_in_snow'], ['srv03'])
+        self.assertEqual(result['missing_in_syncer'], ['srv02'])
+
+    def test_only_the_hostname_field_is_read(self):
+        _, asked = self._compare([], [], hostname_field='fqdn')
+        self.assertEqual(asked, ['fqdn'])
+
+    def test_a_rewrite_keeps_the_fields_of_the_account(self):
+        with patch.object(snow.Host, 'rewrite_hostname', create=True,
+                          return_value='srv01.example.com'):
+            result, asked = self._compare([{'name': 'srv01'}], ['srv01.example.com'],
+                                          rewrite_hostname='{{ HOSTNAME }}.example.com')
+        self.assertEqual(asked, [None])
+        self.assertEqual(result['matched'], 1)
+
+
 class TestInventorizeTables(unittest.TestCase):
     """Tests for parse_inventorize_tables"""
 
