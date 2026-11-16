@@ -10,12 +10,13 @@ from flask_admin.actions import action
 from flask_admin.base import expose
 from flask_admin.form import rules
 from wtforms import StringField
-from wtforms.validators import ValidationError
+from wtforms.validators import Optional, ValidationError
 from application.models.cron import CronGroup, job_account
 from application.views.default import DefaultModelView, name_and_enabled_filters
 from application.views._form_sections import modern_form, section
 from application.models.account import CustomEntry, Account
 from application.models.host import Host
+from application.models.host_templates import assignable_templates
 from application.helpers.plugins import custom_field_help, discover_plugins
 from application.plugins.checkmk.models import CheckmkObjectCache  # TODO: Make Plugin Compatible
 from application.docu_links import docu_links
@@ -69,6 +70,23 @@ _HELP_RESTRICT_TO = (
     "keeps it from importing hosts of its own — useful for an account that "
     "should just enrich hosts another system owns."
 )
+_HELP_AUTO_APPLY_TEMPLATES = (
+    "CMDB templates every object imported through this account gets. "
+    "Templates already assigned to an object stay, a template removed here "
+    "stays on the objects which have it."
+)
+
+
+def _template_choices(form):
+    """
+    Offer only CMDB templates in the Auto Apply Templates picker. Set per
+    form, since a queryset kept on the form class caches its first result.
+    """
+    if hasattr(form, 'auto_apply_templates'):
+        form.auto_apply_templates.queryset = assignable_templates()
+    return form
+
+
 _HELP_CMDB_OBJECT = (
     "Treat this account as a source for your internal CMDB. Imported entries "
     "automatically get your CMDB template and default fields, and are kept "
@@ -154,18 +172,21 @@ class ChildAccountModelView(DefaultModelView):
 
     column_exclude_list = [
             'custom_fields', 'is_child', 'type',
-            'is_master', 'address', 'username', 'password']
+            'is_master', 'address', 'username', 'password', 'auto_apply_templates']
 
     column_filters = name_and_enabled_filters()
 
     column_labels = {
         'require_fqdn': 'Require FQDN',
         'restrict_to': 'Restrict to',
+        'auto_apply_templates': 'Auto Apply Templates',
     }
 
     form_args = {
         'require_fqdn': {'label': 'Require FQDN'},
         'restrict_to': {'label': 'Restrict to'},
+        'auto_apply_templates': {'label': 'Auto Apply Templates',
+                                 'validators': [Optional()]},
     }
 
     form_rules = [
@@ -184,6 +205,8 @@ class ChildAccountModelView(DefaultModelView):
                     [rules.Field('is_object'),
                      _field_help(_HELP_IS_OBJECT),
                      rules.Field('object_type'),
+                     rules.Field('auto_apply_templates'),
+                     _field_help(_HELP_AUTO_APPLY_TEMPLATES),
                      rules.Field('check_for_valid_hostname'),
                      rules.Field('require_fqdn')]),
             section('3', 'out', 'Additional Configuration',
@@ -193,6 +216,14 @@ class ChildAccountModelView(DefaultModelView):
         ),
     ]
 
+
+    def create_form(self, obj=None):
+        """Offer only CMDB templates to apply"""
+        return _template_choices(super().create_form(obj))
+
+    def edit_form(self, obj=None):
+        """Offer only CMDB templates to apply"""
+        return _template_choices(super().edit_form(obj))
 
     def on_model_change(self, form, model, is_created):
         """
@@ -218,7 +249,8 @@ class AccountModelView(DefaultModelView):
 
     column_filters = name_and_enabled_filters()
 
-    column_exclude_list = ['custom_fields', 'is_child', 'parent', 'password_crypted']
+    column_exclude_list = ['custom_fields', 'is_child', 'parent', 'password_crypted',
+                           'auto_apply_templates']
 
     # The custom fields are name/value pairs, so what they configure is
     # invisible in the form. These templates add the help of a field
@@ -288,6 +320,8 @@ class AccountModelView(DefaultModelView):
                      rules.Field('cmdb_object'),
                      _field_help(_HELP_CMDB_OBJECT),
                      rules.Field('object_type'),
+                     rules.Field('auto_apply_templates'),
+                     _field_help(_HELP_AUTO_APPLY_TEMPLATES),
                      rules.Field('check_for_valid_hostname'),
                      rules.Field('require_fqdn')]),
         ),
@@ -301,6 +335,7 @@ class AccountModelView(DefaultModelView):
         'cmdb_object': 'CMDB object',
         'restrict_to': 'Restrict to',
         'shadow_mode': 'Shadow source',
+        'auto_apply_templates': 'Auto Apply Templates',
     }
 
     form_args = {
@@ -308,6 +343,8 @@ class AccountModelView(DefaultModelView):
         'cmdb_object': {'label': 'CMDB object'},
         'restrict_to': {'label': 'Restrict to'},
         'shadow_mode': {'label': 'Shadow source'},
+        'auto_apply_templates': {'label': 'Auto Apply Templates',
+                                 'validators': [Optional()]},
     }
 
     @action('clear_shadow', 'Clear Shadow Source Data',
@@ -401,7 +438,7 @@ class AccountModelView(DefaultModelView):
         schema of `account_custom_field_presets`) and has no safe-to-apply
         semantics at the plugin layer.
         """
-        form = super().edit_form(obj)
+        form = _template_choices(super().edit_form(obj))
         if hasattr(form, 'type'):
             self._lock_type_field(form)
         return form
@@ -415,7 +452,7 @@ class AccountModelView(DefaultModelView):
         ever hitting Save. The picker in step 1 already captured the
         plugin type, so the dropdown stays read-only here too.
         """
-        form = super().create_form(obj)
+        form = _template_choices(super().create_form(obj))
 
         account_type = (request.args.get('type') or '').strip()
         if not account_type:

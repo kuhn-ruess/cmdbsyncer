@@ -481,6 +481,25 @@ class Host(HostLabelsMixin, db.Document):
             return True
         return False
 
+    def apply_account_templates(self, template_ids):
+        """
+        Give the host the CMDB templates its import account applies
+        automatically. Templates already assigned are kept, missing ones
+        are added; a template which no longer exists is skipped.
+        """
+        if not template_ids:
+            return
+        existing = list(self.cmdb_templates or [])
+        missing = set(template_ids) - {template.id for template in existing}
+        if not missing:
+            return
+        templates = Host.objects(id__in=list(missing), object_type='template')
+        added = list(templates.order_by('hostname'))
+        if added:
+            self.cmdb_templates = existing + added
+            # Templates feed into the cached host attributes
+            self.cache = {}
+
     def lock_to_folder(self, folder_name):
         """
         Lock System to given Folder
@@ -729,6 +748,8 @@ class Host(HostLabelsMixin, db.Document):
             self.no_autodelete = True
             self.get_cmdb_template()
             self.ensure_cmdb_default_fields()
+
+        self.apply_account_templates(account_dict.get('auto_apply_templates'))
 
         self.is_object = is_object
         self.last_import_id = import_id

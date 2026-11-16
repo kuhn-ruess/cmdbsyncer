@@ -169,6 +169,9 @@ def _build_account_dict(name, is_id):
     child_data = _flatten_account(account)
     for field in _CHILD_OWNED_FIELDS:
         child_data.pop(field, None)
+    if not child_data.get('auto_apply_templates'):
+        # No own templates: the child applies the ones of its parent
+        child_data.pop('auto_apply_templates', None)
     child_data['is_child'] = True
     parent_data = get_account_by_name(account.parent.id, is_id=True)
     parent_data.update(child_data)

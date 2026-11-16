@@ -103,6 +103,8 @@ class Account(db.Document):
             fails the RFC-1123 regex (non-object accounts only).
         require_fqdn (bool): Reject imported hosts whose name is not a
             fully-qualified domain name (non-object accounts only).
+        auto_apply_templates (list): CMDB templates assigned to every
+            object imported through this account.
         address (str): Address or endpoint for the account.
         username (str): Username for authentication.
         password (str): Plaintext password (for backward compatibility).
@@ -151,6 +153,10 @@ class Account(db.Document):
     # accounts are exempt from both — their name is not a real hostname.
     check_for_valid_hostname = db.BooleanField(default=False)
     require_fqdn = db.BooleanField(default=False)
+
+    # CMDB templates every object imported through this account gets.
+    # Referenced by name: the Host model imports this module.
+    auto_apply_templates = db.ListField(field=db.ReferenceField(document_type='Host'))
 
     address = db.StringField()
     username = db.StringField()
