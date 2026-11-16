@@ -3641,6 +3641,12 @@ class _PostRowAction(EndpointLinkRowAction):
             f'<span class="{escape(self.icon_class)}"></span></button></form>')
 
 
+def _restore_reason():
+    """Who restores an archived host, for its log"""
+    actor = getattr(current_user, 'email', None) or 'web UI'
+    return f"restored via UI by {actor}"
+
+
 class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
     # pylint: disable=too-many-ancestors
     """
@@ -3729,7 +3735,7 @@ class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
     def restore_row(self):
         """Restore a single archived host back to active (per-row action)."""
         host = self.get_query().filter(id=request.form.get('id')).first()
-        if host and host.restore():
+        if host and host.restore(reason=_restore_reason()):
             host.save()
             flash(f"Restored {host.hostname} to active.", 'success')
         elif host:
@@ -3742,8 +3748,9 @@ class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
     def action_restore(self, ids):
         """Bring archived hosts back as active."""
         restored = 0
+        reason = _restore_reason()
         for host in self.get_query().filter(id__in=ids):
-            if host.restore():
+            if host.restore(reason=reason):
                 host.save()
                 restored += 1
         flash(f'Restored {restored} host(s) to active.', 'success')
