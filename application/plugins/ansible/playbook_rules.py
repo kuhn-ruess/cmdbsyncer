@@ -69,6 +69,9 @@ def _fire(matched, hostname, available):
                 provider=(outcome.get('inventory') or '').strip() or None,
                 source='rule',
                 triggered_by=f'rule:{rule_id}',
+                # Cron and CLI end their process right after this command,
+                # which would end the run thread with it
+                wait=True,
             )
             fired += 1
     return fired
