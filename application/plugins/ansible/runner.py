@@ -492,7 +492,8 @@ def run_playbook(playbook: str, *,  # pylint: disable=too-many-arguments
                  ssh_user: str | None = None,
                  ssh_password: str | None = None,
                  source: str = 'ui',
-                 triggered_by: str | None = None) -> AnsibleRunStats:
+                 triggered_by: str | None = None,
+                 wait: bool = False) -> AnsibleRunStats:
     """
     Kick off a playbook run in a background daemon thread and return the
     AnsibleRunStats record so callers can redirect to its detail page.
@@ -504,7 +505,9 @@ def run_playbook(playbook: str, *,  # pylint: disable=too-many-arguments
     `ssh_user` / `ssh_password` set the SSH login for the connection.
     The password is written to a mode-0600 vars file for the run (never
     the command line) and is not stored on the run record; password auth
-    needs `sshpass` on the host.
+    needs `sshpass` on the host. `wait=True` returns only when the run
+    has ended, for callers like a cron job whose process would end the
+    daemon thread with it.
 
     Caller responsibility: validate `playbook` against available_playbooks()
     before invoking — this function does no whitelist check, so passing
@@ -541,4 +544,7 @@ def run_playbook(playbook: str, *,  # pylint: disable=too-many-arguments
         name=f'ansible-runner-{stats.pk}',
     )
     thread.start()
+    if wait:
+        thread.join()
+        stats.reload()
     return stats

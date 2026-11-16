@@ -213,6 +213,9 @@ class TestPlaybookFireRows(unittest.TestCase):
             self.assertEqual(playbook_rules.fire_playbook_rules(), 2)
         self.assertEqual([call.kwargs['target_host'] for call in run.call_args_list],
                          ['srv01', 'srv02'])
+        # Cron and CLI end their process right after, so every run is awaited
+        self.assertEqual([call.kwargs['wait'] for call in run.call_args_list],
+                         [True, True])
 
 
 class TestPluginListRows(unittest.TestCase):
