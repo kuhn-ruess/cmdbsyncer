@@ -108,6 +108,8 @@ run_statuses = [
     ('success', 'Success'),
     ('failure', 'Failure'),
     ('cancelled', 'Cancelled'),
+    # The process running it ended before the run did, the result is unknown
+    ('aborted', 'Aborted'),
 ]
 
 # Retention of the run history. It is the run *log* that makes these
@@ -140,6 +142,8 @@ class AnsibleRunStats(db.Document):
     status = db.StringField(choices=run_statuses, default='running')
     exit_code = db.IntField()
     pid = db.IntField()
+    # The machine whose process runs it: only there can it be checked
+    runner_host = db.StringField()
 
     log = db.StringField()
 

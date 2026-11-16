@@ -20,7 +20,9 @@ client.post('/login', data={
 })
 run = AnsibleRunStats(playbook='cmk_server_mngmt.yml', target_host='srv01',
                       status='running', started_at=datetime.now(),
-                      log='PLAY [all]\\n', pid=4711).save()
+                      log='PLAY [all]\\n', pid=4711,
+                      # Started elsewhere: pid 4711 is not checked here
+                      runner_host='other-machine').save()
 base = '/admin/ansiblerunstats/'
 
 page = check(f'{base}details/?id={run.id}', 200).get_data(as_text=True)

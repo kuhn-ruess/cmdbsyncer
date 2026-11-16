@@ -11,7 +11,7 @@ from application.modules.rule.list_source import is_list_rule
 from application.modules.rule.rule import Rule
 
 from .models import AnsiblePlaybookFireRule, AnsibleRunStats, ensure_default_project
-from .runner import available_playbooks, run_playbook
+from .runner import available_playbooks, mark_orphaned_runs, run_playbook
 
 
 class _PlaybookMatcher(Rule):
@@ -34,12 +34,16 @@ class _PlaybookMatcher(Rule):
 
 
 def _already_fired(rule_id: str, hostname: str, playbook: str) -> bool:
-    """Has this exact (rule, host, playbook) already produced a run record?"""
+    """
+    Has this exact (rule, host, playbook) already produced a run record?
+    An aborted run does not count: nobody knows whether it did its work.
+    """
     return AnsibleRunStats.objects(
         playbook=playbook,
         target_host=hostname,
         source='rule',
         triggered_by=f'rule:{rule_id}',
+        status__ne='aborted',
     ).first() is not None
 
 
@@ -110,6 +114,8 @@ def fire_playbook_rules(account=False):  # pylint: disable=unused-argument
 
     available = set(available_playbooks())
     fired = 0
+    # Runs whose process is gone fire again, see _already_fired()
+    mark_orphaned_runs(source='rule')
 
     host_rules = [rule for rule in enabled if not is_list_rule(rule)]
     syncers = _syncers_per_project(host_rules) if host_rules else []

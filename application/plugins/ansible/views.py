@@ -3,6 +3,7 @@ Ansible Rule Views
 """
 from datetime import datetime
 
+from bson import ObjectId
 from flask import abort, flash, redirect, request, url_for
 from flask_admin import BaseView, expose
 from flask_admin.contrib.mongoengine.filters import FilterEqual, FilterLike
@@ -37,6 +38,7 @@ from .models import (
     AnsibleProject,
     AnsibleRewriteAttributesRule,
     AnsibleRunStats,
+    run_statuses,
 )
 from . import cmk_sites_ssh_key
 from .seed import SEED_TEMPLATES, seed_project
@@ -44,6 +46,7 @@ from .runner import (
     _ansible_dir,
     available_playbooks,
     cancel_run,
+    mark_orphaned_runs,
     playbook_inventory_provider,
     run_playbook,
 )
@@ -569,6 +572,7 @@ def _format_status(_v, _c, m, _p):
         'success': 'green',
         'failure': 'red',
         'cancelled': '#d97706',
+        'aborted': '#d97706',
     }.get(m.status, '#888')
     label = (m.status or 'unknown').capitalize()
     return Markup(f'<span style="color:{color};font-weight:600;">{escape(label)}</span>')
@@ -606,6 +610,12 @@ def _live(formatter=None):
             else escape('' if getattr(model, name) is None else getattr(model, name))
         return Markup(f'<span data-run-field="{name}">{value}</span>')
     return _format
+
+
+def _mark_run_if_orphaned(run_id):
+    """Mark the run `run_id` aborted if its process is gone"""
+    if run_id and ObjectId.is_valid(run_id):
+        mark_orphaned_runs(pk=run_id)
 
 
 class AnsibleRunStatsView(DefaultModelView):
@@ -652,12 +662,7 @@ class AnsibleRunStatsView(DefaultModelView):
     column_filters = (
         FilterLike('playbook', 'Playbook'),
         FilterLike('target_host', 'Host'),
-        FilterEqual('status', 'Status', options=[
-            ('running', 'Running'),
-            ('success', 'Success'),
-            ('failure', 'Failure'),
-            ('cancelled', 'Cancelled'),
-        ]),
+        FilterEqual('status', 'Status', options=run_statuses),
         FilterEqual('mode', 'Mode', options=[
             ('run', 'Run'),
             ('check', 'Preview'),
@@ -705,6 +710,18 @@ class AnsibleRunStatsView(DefaultModelView):
     # appends the new log lines, instead of reloading the whole page.
     details_template = 'admin/ansible_run_details.html'
 
+    @expose('/')
+    def index_view(self):
+        """The history, with runs whose process is gone marked aborted"""
+        mark_orphaned_runs()
+        return super().index_view()
+
+    @expose('/details/')
+    def details_view(self):
+        """One run, marked aborted if its process is gone"""
+        _mark_run_if_orphaned(request.args.get('id'))
+        return super().details_view()
+
     @expose('/progress/<run_id>')
     def progress(self, run_id):
         """
@@ -713,6 +730,7 @@ class AnsibleRunStatsView(DefaultModelView):
         back; once ended, the whole log, which may have been replaced by an
         error or got a hint appended.
         """
+        _mark_run_if_orphaned(run_id)
         stats = AnsibleRunStats.objects(id=run_id).only(
             'status', 'log', 'ended_at', 'exit_code', 'pid').first()
         if stats is None:

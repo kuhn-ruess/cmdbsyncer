@@ -10,13 +10,14 @@ import os
 import shlex
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
 import threading
 import time
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import yaml
@@ -394,6 +395,74 @@ def cancel_run(stats) -> bool:
         return False
 
 
+# A run without process yet is still preparing it, for this long at most
+PREPARE_GRACE = timedelta(minutes=10)
+
+ABORTED_NOTE = (
+    "\n--- CMDBsyncer ---\n"
+    "The process running this playbook ended before the playbook did, for "
+    "example by a restart of the Syncer. Its result is unknown.\n"
+)
+
+
+def _ansible_process_alive(pid: int) -> bool:
+    """
+    Is `pid` still an ansible-playbook process? Where /proc exists, its
+    command line has to say so, because after a restart the pid can belong
+    to an unrelated process. Without /proc, any process counts.
+    """
+    proc_dir = Path('/proc')
+    if proc_dir.is_dir():
+        try:
+            cmdline = (proc_dir / str(pid) / 'cmdline').read_bytes()
+        except OSError:
+            return False
+        return b'ansible-playbook' in cmdline
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def run_is_orphaned(stats) -> bool:
+    """
+    True if a 'running' run has no process left that could end it. Runs
+    of another machine are never judged, their processes are not visible
+    here.
+    """
+    if stats.status != 'running':
+        return False
+    if stats.runner_host and stats.runner_host != socket.gethostname():
+        return False
+    if not stats.pid:
+        return bool(stats.started_at) and \
+            datetime.now() - stats.started_at > PREPARE_GRACE
+    return not _ansible_process_alive(stats.pid)
+
+
+def mark_orphaned_runs(**filters) -> int:
+    """
+    Give every 'running' run (narrowed by `filters`) whose process is gone
+    the status 'aborted', so it does not stay running forever and a fire
+    rule can start it again. Returns how many were marked.
+    """
+    marked = 0
+    for stats in AnsibleRunStats.objects(status='running', **filters).exclude('log'):
+        if not run_is_orphaned(stats):
+            continue
+        current = AnsibleRunStats.objects(pk=stats.pk).only('log').first()
+        # Only while still running: the run's own thread may just end it
+        marked += AnsibleRunStats.objects(pk=stats.pk, status='running').update(
+            set__status='aborted',
+            set__ended_at=datetime.now(),
+            set__log=((current.log if current else '') or '') + ABORTED_NOTE,
+        )
+    return marked
+
+
 def _stream_output(proc, stats) -> str:
     """
     Read the process output line by line and persist it into `stats.log`
@@ -414,6 +483,35 @@ def _stream_output(proc, stats) -> str:
     return ''.join(captured)
 
 
+def _base_env(provider: str, cwd: Path) -> dict:
+    """The environment of an ansible-playbook run, before its temp dir."""
+    env = os.environ.copy()
+    env['CMDBSYNCER_INVENTORY_PROVIDER'] = provider
+    env.setdefault('CMDBSYNCER_INVENTORY_MODE', 'local')
+    # A failed inventory parse (broken/outdated inventory plugin, bad
+    # provider) otherwise leaves ansible-playbook running against an
+    # empty host list and exiting 0 — which we would record as a
+    # successful run. Make an unparsable inventory a fatal error so the
+    # process exits non-zero and the run is logged as a failure.
+    env.setdefault('ANSIBLE_INVENTORY_ANY_UNPARSED_IS_FAILED', 'True')
+    # In local mode the plugin shells the cmdbsyncer CLI, which resolves
+    # its config from $CMDBSYNCER_CONFIG_DIR / cwd. Point it at the
+    # deployment root (where local_config.py sits, next to ansible/) so
+    # the sub-process finds the same config as the web app — mirrors the
+    # legacy ansible/inventory shim.
+    env.setdefault('CMDBSYNCER_CONFIG_DIR', str(cwd.parent))
+    # Make Ansible find the cmdbsyncer_inventory plugin regardless of
+    # where the spec file lives (the run temp dir), prepending it to any
+    # path the operator already configured.
+    plugin_dir = _inventory_plugin_dir()
+    if plugin_dir:
+        configured = env.get('ANSIBLE_INVENTORY_PLUGINS')
+        env['ANSIBLE_INVENTORY_PLUGINS'] = (
+            f"{plugin_dir}{os.pathsep}{configured}" if configured else plugin_dir
+        )
+    return env
+
+
 def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
     """
     Run ansible-playbook to completion and update the stats row. Stdout
@@ -426,30 +524,7 @@ def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
         stats = AnsibleRunStats.objects(pk=stats_id).first()
         if not stats:
             return
-        env = os.environ.copy()
-        env['CMDBSYNCER_INVENTORY_PROVIDER'] = provider
-        env.setdefault('CMDBSYNCER_INVENTORY_MODE', 'local')
-        # A failed inventory parse (broken/outdated inventory plugin, bad
-        # provider) otherwise leaves ansible-playbook running against an
-        # empty host list and exiting 0 — which we would record as a
-        # successful run. Make an unparsable inventory a fatal error so the
-        # process exits non-zero and the run is logged as a failure.
-        env.setdefault('ANSIBLE_INVENTORY_ANY_UNPARSED_IS_FAILED', 'True')
-        # In local mode the plugin shells the cmdbsyncer CLI, which resolves
-        # its config from $CMDBSYNCER_CONFIG_DIR / cwd. Point it at the
-        # deployment root (where local_config.py sits, next to ansible/) so
-        # the sub-process finds the same config as the web app — mirrors the
-        # legacy ansible/inventory shim.
-        env.setdefault('CMDBSYNCER_CONFIG_DIR', str(cwd.parent))
-        # Make Ansible find the cmdbsyncer_inventory plugin regardless of
-        # where the spec file lives (the run temp dir), prepending it to any
-        # path the operator already configured.
-        plugin_dir = _inventory_plugin_dir()
-        if plugin_dir:
-            configured = env.get('ANSIBLE_INVENTORY_PLUGINS')
-            env['ANSIBLE_INVENTORY_PLUGINS'] = (
-                f"{plugin_dir}{os.pathsep}{configured}" if configured else plugin_dir
-            )
+        env = _base_env(provider, cwd)
         # Ansible writes scratch files under ``$HOME/.ansible/tmp`` and
         # respects ``ANSIBLE_LOCAL_TEMP`` for the same path. Under mod_wsgi
         # / gunicorn the process inherits the web user's $HOME (e.g.
@@ -458,32 +533,36 @@ def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
         # directories(/usr/share/httpd/.ansible/tmp): Permission denied".
         # Give each run its own temp dir, point both vars at it, and
         # clean up afterwards so we don't leak under /tmp.
-        run_tmp = tempfile.mkdtemp(prefix='cmdbsyncer-ansible-')
-        env['ANSIBLE_LOCAL_TEMP'] = run_tmp
-        env['HOME'] = run_tmp
-        # ANSIBLE_LOCAL_TEMP / $HOME only cover the controller-side scratch
-        # dir. A task delegated to localhost (delegate_to: localhost) runs
-        # over the *local* connection, whose remote_tmp still defaults to
-        # ``~/.ansible/tmp`` — and that ``~`` is expanded via the passwd
-        # database (the web user's non-writable home, e.g.
-        # ``/usr/share/httpd``), ignoring $HOME. That makes such tasks abort
-        # "Failed to create temporary directory". Pin remote_tmp to /tmp (a
-        # literal path, no ``~`` to expand) so local-delegated tasks work.
-        # /tmp itself rather than a directory of the run: Ansible removes
-        # its ansible-tmp-* directories again, but would leave the base
-        # directory behind on every host. Nothing lands in the home of the
-        # login user, which file integrity checks like AIDE watch.
-        env['ANSIBLE_REMOTE_TEMP'] = '/tmp'
-        _apply_ssh_env(env, run_tmp)
-        inventory_path = _write_run_inventory_spec(
-            run_tmp, provider, env['CMDBSYNCER_INVENTORY_MODE'],
-            cmdbsyncer_bin=_cmdbsyncer_bin(),
-        )
-        cmd = _build_command(inventory_path, run_params,
-                             **_login_files(run_tmp, run_params))
-        log_start(stats, provider)
+        # Everything from here on in the try: whatever fails, the run ends
+        # as failure and its temp dir goes, instead of staying 'running'
+        run_tmp = None
+        cmd = None
         hint = ''
         try:
+            run_tmp = tempfile.mkdtemp(prefix='cmdbsyncer-ansible-')
+            env['ANSIBLE_LOCAL_TEMP'] = run_tmp
+            env['HOME'] = run_tmp
+            # ANSIBLE_LOCAL_TEMP / $HOME only cover the controller-side scratch
+            # dir. A task delegated to localhost (delegate_to: localhost) runs
+            # over the *local* connection, whose remote_tmp still defaults to
+            # ``~/.ansible/tmp`` — and that ``~`` is expanded via the passwd
+            # database (the web user's non-writable home, e.g.
+            # ``/usr/share/httpd``), ignoring $HOME. That makes such tasks abort
+            # "Failed to create temporary directory". Pin remote_tmp to /tmp (a
+            # literal path, no ``~`` to expand) so local-delegated tasks work.
+            # /tmp itself rather than a directory of the run: Ansible removes
+            # its ansible-tmp-* directories again, but would leave the base
+            # directory behind on every host. Nothing lands in the home of the
+            # login user, which file integrity checks like AIDE watch.
+            env['ANSIBLE_REMOTE_TEMP'] = '/tmp'
+            _apply_ssh_env(env, run_tmp)
+            inventory_path = _write_run_inventory_spec(
+                run_tmp, provider, env['CMDBSYNCER_INVENTORY_MODE'],
+                cmdbsyncer_bin=_cmdbsyncer_bin(),
+            )
+            cmd = _build_command(inventory_path, run_params,
+                                 **_login_files(run_tmp, run_params))
+            log_start(stats, provider)
             proc = subprocess.Popen(  # pylint: disable=consider-using-with
                 cmd,
                 cwd=str(cwd),
@@ -517,11 +596,13 @@ def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
             stats.exit_code = -1
             stats.status = 'failure'
         except Exception as exc:  # pylint: disable=broad-except
-            stats.log = f"Runner error: {exc}\nCommand: {shlex.join(cmd)}"
+            command = f"\nCommand: {shlex.join(cmd)}" if cmd else ''
+            stats.log = f"Runner error: {exc}{command}"
             stats.exit_code = -1
             stats.status = 'failure'
         finally:
-            shutil.rmtree(run_tmp, ignore_errors=True)
+            if run_tmp:
+                shutil.rmtree(run_tmp, ignore_errors=True)
             stats.ended_at = datetime.now()
             stats.save()
             log_end(stats, hint)
@@ -579,6 +660,7 @@ def run_playbook(playbook: str, *,  # pylint: disable=too-many-arguments
         triggered_by=triggered_by,
         started_at=datetime.now(),
         status='running',
+        runner_host=socket.gethostname(),
     )
     stats.save()
 
