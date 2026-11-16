@@ -955,7 +955,7 @@ _try_load_real_module(
 _ansible_models = sys.modules.setdefault(
     "application.plugins.ansible.models",
     types.ModuleType("application.plugins.ansible.models"))
-for _name in ("AnsibleRunStats", "AnsiblePlaybookFireRule"):
+for _name in ("AnsibleRunStats", "AnsiblePlaybookFireRule", "ensure_default_project"):
     if not hasattr(_ansible_models, _name):
         setattr(_ansible_models, _name, MagicMock(name=f"stub.{_name}"))
 _try_load_real_module(

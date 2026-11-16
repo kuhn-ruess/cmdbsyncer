@@ -7,9 +7,10 @@ that read-only `--list` calls never start playbook runs. Invoked via the
 """
 from application import logger
 from application.models.host import Host
+from application.modules.rule.list_source import is_list_rule
 from application.modules.rule.rule import Rule
 
-from .models import AnsiblePlaybookFireRule, AnsibleRunStats
+from .models import AnsiblePlaybookFireRule, AnsibleRunStats, ensure_default_project
 from .runner import available_playbooks, run_playbook
 
 
@@ -73,6 +74,22 @@ def _fire(matched, hostname, available):
     return fired
 
 
+def _syncers_per_project(rules):
+    """
+    The fire rules grouped by their project, each with the inventory
+    syncer of that project. A rule without project belongs to the
+    Default project, like in the inventory.
+    """
+    # pylint: disable-next=import-outside-toplevel,cyclic-import
+    from . import _build_ansible_provider
+    groups = {}
+    for rule in rules:
+        project = rule.project or ensure_default_project()
+        groups.setdefault(project.pk, (project, []))[1].append(rule)
+    return [(_build_ansible_provider(project), project_rules)
+            for project, project_rules in groups.values()]
+
+
 def fire_playbook_rules(account=False):  # pylint: disable=unused-argument
     """
     Walk all hosts, evaluate enabled fire-rules, dispatch playbook runs
@@ -91,14 +108,23 @@ def fire_playbook_rules(account=False):  # pylint: disable=unused-argument
     available = set(available_playbooks())
     fired = 0
 
+    host_rules = [rule for rule in enabled if not is_list_rule(rule)]
+    syncers = _syncers_per_project(host_rules) if host_rules else []
     for db_host in Host.get_export_hosts():
-        matcher = _PlaybookMatcher()
-        matcher.rules = enabled
-        matcher.attributes = db_host.get_labels() or {}
-        matcher.hostname = db_host.hostname
-        matcher.db_host = db_host
-        matcher.check_rules(db_host.hostname)
-        fired += _fire(matcher._matched, db_host.hostname, available)
+        for syncer, rules in syncers:
+            # The attributes the inventory of the project has for the host:
+            # labels, inventory data, templates, custom attributes, rewrites
+            attributes = syncer.get_attributes(db_host, syncer.cache_key)
+            if not attributes:
+                # The filter of the project drops the host
+                continue
+            matcher = _PlaybookMatcher()
+            matcher.rules = rules
+            matcher.attributes = attributes['all']
+            matcher.hostname = db_host.hostname
+            matcher.db_host = db_host
+            matcher.check_rules(db_host.hostname)
+            fired += _fire(matcher._matched, db_host.hostname, available)
 
     matcher = _PlaybookMatcher()
     matcher.rules = enabled
