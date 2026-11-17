@@ -419,7 +419,7 @@ class SiteUpdateResultTest(unittest.TestCase):
     """A failed omd update fails the run with its reasons, and the site is
     started again; before, the run passed and the site kept its version."""
 
-    def _run(self, update_ok):
+    def _run(self, update_ok, preflight='abort'):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
         os.mkdir(os.path.join(tmp, 'bin'))
@@ -436,7 +436,7 @@ class SiteUpdateResultTest(unittest.TestCase):
         play = [{'hosts': 'all', 'gather_facts': False, 'tasks': tasks, 'vars': {
             'cmk_site': 'mysite', 'cmk_version': '2.5.0p19', 'cmk_edition': 'pro',
             'server_site_version': {'stdout': '2.4.0p20.pro'},
-            'site_just_installed': {'changed': False}}}]
+            'site_just_installed': {'changed': False}, 'cmk_preflight': preflight}}]
         with open(os.path.join(tmp, 'play.yml'), 'w', encoding='utf-8') as handle:
             yaml.safe_dump(play, handle)
         calls = os.path.join(tmp, 'calls')
@@ -461,6 +461,7 @@ class SiteUpdateResultTest(unittest.TestCase):
                       "Incompatible local file '/omd/sites/mysite/local/share/check_mk/"
                       "web/plugins/pages/x.py'. / WARNING: A valid and non expired license "
                       'is needed before updating.', proc.stdout)
+        self.assertIn('set the Ansible variable cmk_preflight=ignore', proc.stdout)
         self.assertEqual(calls[-1], 'omd start mysite')
 
     def test_update_passes(self):
@@ -468,6 +469,16 @@ class SiteUpdateResultTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout[-2000:])
         self.assertIn('--pre-flight=abort', calls[1])
         self.assertEqual(calls[-1], 'omd start mysite')
+
+    def test_preflight_can_be_ignored(self):
+        proc, calls = self._run(update_ok=True, preflight='ignore')
+        self.assertEqual(proc.returncode, 0, proc.stdout[-2000:])
+        self.assertIn('--pre-flight=ignore', calls[1])
+
+    def test_default_is_abort(self):
+        for role in ('cmk_server_mngmt', 'cmk_appliance_mngmt'):
+            defaults = _load(os.path.join(_ROLES, role, 'defaults', 'main.yml'))
+            self.assertEqual(defaults['cmk_preflight'], 'abort', role)
 
 
 if __name__ == '__main__':

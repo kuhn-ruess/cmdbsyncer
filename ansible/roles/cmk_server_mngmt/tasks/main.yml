@@ -140,9 +140,10 @@
   when: downtime_result is failed
 
 # Checkmk 2.5 asks for the new version and edition and runs a pre-flight
-# check (incompatible local files, licensing) during the update. Confirm the
-# questions, and abort instead of continuing past a failed pre-flight check,
-# which can leave the site broken. Older versions only know --conflict.
+# check during the update. Confirm the questions; what a failed pre-flight
+# check does is up to cmk_preflight: abort (default) or ignore, for findings
+# like deprecated check_http rules that should not stop the update. Older
+# versions only know --conflict.
 # The site is started again either way; a failed update fails the next task
 # with the reasons omd printed, instead of passing as changed.
 - name: "Update Sites to {{ cmk_version }}.{{ cmk_edition }}"
@@ -151,7 +152,7 @@
     omd stop {{ cmk_site }}
     rc=0
     {% if cmk_version is version('2.5.0', '>=') %}
-    omd -V {{ cmk_version }}.{{ cmk_edition }} update --pre-flight=abort --skeleton=install --confirm-version --confirm-edition {{ cmk_site }} || rc=$?
+    omd -V {{ cmk_version }}.{{ cmk_edition }} update --pre-flight={{ cmk_preflight | quote }} --skeleton=install --confirm-version --confirm-edition {{ cmk_site }} || rc=$?
     {% else %}
     omd -f -V {{ cmk_version }}.{{ cmk_edition }} update --conflict=install {{ cmk_site }} || rc=$?
     {% endif %}
@@ -175,4 +176,5 @@
       omd update of {{ cmk_site }} to {{ cmk_version }}.{{ cmk_edition }} failed
       (exit code {{ site_update.rc }}), the site runs on its old version again:
       {{ (update_reasons[-8:] if update_reasons else update_output[-5:]) | join(' / ') }}
+      {{ '(to update past a failed pre-flight check, set the Ansible variable cmk_preflight=ignore for this site)' if cmk_preflight == 'abort' else '' }}
   when: site_update is not skipped and site_update.rc != 0
