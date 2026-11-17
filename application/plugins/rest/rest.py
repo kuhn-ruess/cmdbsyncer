@@ -12,6 +12,7 @@ from application import logger
 from application.modules.plugin import Plugin, ResponseDataException
 from application.modules.debug import ColorCodes
 from application.helpers.inventory import run_inventory
+from application.helpers.syncer_jinja import render_jinja
 from application.helpers.import_hostnames import get_import_hosts, update_import_host
 
 
@@ -51,7 +52,11 @@ class RestImport(Plugin):
         }
 
         if params['method'].lower() == 'post':
-            params['data'] = self.config.get('post_body', {})
+            body = self.config.get('post_body')
+            if body:
+                # Jinja, e.g. to build the body from a lookup table
+                body = render_jinja(body, mode='raise', replace_newlines=False)
+            params['data'] = body or {}
 
         if auth:
             params['auth'] = auth

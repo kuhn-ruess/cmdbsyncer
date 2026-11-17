@@ -119,7 +119,10 @@
       'Replace attribute with the host attribute that holds the key.'));
     HELP.tables.forEach(function(table) {
       var quoted = "'" + table.name.replace(/'/g, "\\'") + "'";
-      var snippet = '{{ lookup(' + quoted + ', attribute) }}';
+      var isTable = table.mode === 'table';
+      var snippet = isTable
+        ? '{% for row in lookup_rows(' + quoted + ') %}{{ row }}{% endfor %}'
+        : '{{ lookup(' + quoted + ', attribute) }}';
       var row = entryButton(input, snippet, table.name,
                             table.key ? 'key: ' + table.key : '');
       panel.appendChild(row);
@@ -130,12 +133,16 @@
         chip.type = 'button';
         chip.title = 'Insert the column ' + column;
         chip.addEventListener('click', function() {
-          insert(input, '{{ lookup(' + quoted + ", attribute, '" + column + "') }}");
+          insert(input, isTable
+            ? '{{ row.' + column + ' }}'
+            : '{{ lookup(' + quoted + ", attribute, '" + column + "') }}");
         });
         chips.appendChild(chip);
       });
       row.dataset.search += ' ' + table.columns.join(' ').toLowerCase();
-      panel.appendChild(chips);
+      if (table.columns.length) {
+        panel.appendChild(chips);
+      }
     });
   }
 

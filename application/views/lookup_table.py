@@ -8,7 +8,9 @@ from flask_login import current_user
 from wtforms import StringField, TextAreaField
 
 from application.docu_links import docu_links
-from application.helpers.lookup_table import clear_cache, parse_lookup_table
+from application.helpers.lookup_table import (
+    MODE_TABLE, clear_cache, parse_lookup_table,
+)
 from application.helpers.sates import add_changes
 from application.modules.rule.views import get_rule_json, invalidate_host_rule_caches
 from application.views.default import DefaultModelView
@@ -17,19 +19,22 @@ from application.views._form_sections import modern_form, section
 
 def _render_table_summary(_view, _context, model, _name):
     """List column: the columns of a table and how many keys it has."""
-    columns, table, errors = parse_lookup_table(model.entries)
+    columns, rows, errors = parse_lookup_table(model.entries, model.mode)
     if errors:
         return Markup('<span class="text-danger">invalid</span>')
     if not columns:
         return Markup('<em>empty</em>')
-    return Markup(f'{len(table)} keys, columns: '
+    unit = 'rows' if model.mode == MODE_TABLE else 'keys'
+    return Markup(f'{len(rows)} {unit}, columns: '
                   f'<code>{escape(", ".join(columns))}</code>')
 
 
 _HELP = Markup(
     '<div class="small" style="margin-bottom: 8px;"><ul style="padding-left: 18px;">'
     '<li><b>First line = column names</b>, every further line one entry. '
-    'The first column is the key, the other columns are values.</li>'
+    '<b>Key / Value</b>: the first column is a unique key, the other columns '
+    'are values. <b>Table</b>: any number of columns, also a single one, '
+    'values may repeat.</li>'
     '<li>Separator (tab from a spreadsheet, <code>;</code>, <code>,</code> or '
     '<code>|</code>) is detected from the first line.</li>'
     "<li>Use it in any Jinja field: <code>{{ lookup('table_name', location) }}"
@@ -38,6 +43,8 @@ _HELP = Markup(
     "'datacenter') }}</code> the column <code>datacenter</code>, "
     "<code>{{ lookup('table_name', location, default='unknown') }}</code> "
     "a fallback.</li>"
+    "<li><code>{% for row in lookup_rows('table_name') %}{{ row.location }}"
+    "{% endfor %}</code> loops over every line, in both modes.</li>"
     '</ul></div>')
 
 
@@ -52,7 +59,7 @@ class LookupTableView(DefaultModelView):
         'name': get_rule_json
     }
 
-    column_list = ('name', 'documentation', 'entries')
+    column_list = ('name', 'mode', 'documentation', 'entries')
     column_sortable_list = ('name',)
     column_filters = ('name',)
     column_formatters = {
@@ -87,9 +94,10 @@ class LookupTableView(DefaultModelView):
             section('1', 'main', 'Main Options',
                     'Name the table the way templates refer to it.',
                     [rules.Field('name'),
+                     rules.Field('mode'),
                      rules.Field('documentation')]),
             section('2', 'out', 'Table',
-                    'Key in the first column, values in the others.',
+                    'First line names the columns, every further line is a row.',
                     [rules.HTML(_HELP),
                      rules.Field('entries')]),
         ),
@@ -106,7 +114,9 @@ class LookupTableView(DefaultModelView):
         if entries is None:
             # Not the table form (e.g. the delete form).
             return True
-        _columns, _table, errors = parse_lookup_table(entries.data)
+        mode = getattr(form, 'mode', None)
+        _columns, _rows, errors = parse_lookup_table(
+            entries.data, mode.data if mode is not None else None)
         for message in errors:
             flash(f"Table: {message}", 'danger')
         return not errors
@@ -115,7 +125,8 @@ class LookupTableView(DefaultModelView):
         """A table that cannot be read, see ``validate_form``."""
         problems = super().rule_import_problems(model)
         return problems + [f"Table: {message}"
-                           for message in parse_lookup_table(model.entries)[2]]
+                           for message in parse_lookup_table(model.entries,
+                                                             model.mode)[2]]
 
     def on_bulk_change(self):
         """An import wrote tables past the form hooks."""

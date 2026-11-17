@@ -12,6 +12,7 @@ added without its help.
 """
 # pylint: disable=import-outside-toplevel
 from application.docu_links import docu_links
+from application.helpers.lookup_table import MODE_KEY_VALUE, MODE_TABLE
 
 # (name, snippet, description). The snippets are one line: the template
 # fields are single line inputs. `attribute` stands for the name of a host
@@ -21,6 +22,9 @@ FUNCTIONS = (
      "{{ lookup('table', attribute, default='unknown') }}",
      "Value of a lookup table (Modules > Lookup Tables) for a key: the second "
      "column, or the column named as third argument."),
+    ('lookup_rows',
+     "{% for row in lookup_rows('table') %}{{ row.column }},{% endfor %}",
+     "Every row of a lookup table as a dict of column to value, to loop over."),
     ('get_list',
      "{% for item in get_list(attribute) %}{{ item }},{% endfor %}",
      "Turns a list, a list literal or a comma separated string into a list."),
@@ -194,10 +198,15 @@ def lookup_tables():
     from application.models.lookup_table import LookupTable
     from application.modules.rule.list_source import parse_list_source
     tables = []
-    for entry in LookupTable.objects.only('name', 'entries').order_by('name'):
+    for entry in LookupTable.objects.only('name', 'mode', 'entries').order_by('name'):
         header = (entry.entries or '').strip('\r\n').split('\n', 1)[0]
         columns = parse_list_source(header).columns
-        tables.append({'name': entry.name, 'key': columns[0] if columns else '',
+        if entry.mode == MODE_TABLE:
+            tables.append({'name': entry.name, 'mode': MODE_TABLE, 'key': '',
+                           'columns': columns})
+            continue
+        tables.append({'name': entry.name, 'mode': MODE_KEY_VALUE,
+                       'key': columns[0] if columns else '',
                        'columns': columns[1:]})
     return tables
 

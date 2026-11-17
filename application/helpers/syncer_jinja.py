@@ -110,6 +110,16 @@ def _lookup(table, key, column=None, default=''):
     return lookup(table, key, column=column, default=default)
 
 
+def _lookup_rows(table):
+    """
+    Every row of a lookup table as a list of dicts, to loop over.
+    Lazily imported to avoid circular imports.
+    """
+    from application.helpers.lookup_table import lookup_rows
+
+    return lookup_rows(table)
+
+
 def syncer_eval(string, default=None):
     """
     Evals given object
@@ -267,6 +277,7 @@ _GLOBALS = {
     'secret': _secret,
     'secret_value': _secret_value,
     'lookup': _lookup,
+    'lookup_rows': _lookup_rows,
     'get_ip_network': get_ip_network,
     'get_ip4_interface': get_ip_interface,
     'get_ip_interface': get_ip_interface,

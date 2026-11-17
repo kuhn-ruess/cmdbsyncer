@@ -7,49 +7,35 @@ not the other would be missing from the panel, or the panel would offer
 one that does not exist.
 """
 # pylint: disable=missing-function-docstring,missing-class-docstring
-import importlib.util
-import os
 import sys
 import types
 import unittest
 from unittest.mock import MagicMock
 
-
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-
-def _load_source(module_name, relative_path):
-    """Load a source file as `module_name`, ensuring its parent exists."""
-    parent = module_name.rsplit('.', 1)[0]
-    if parent and parent not in sys.modules:
-        sys.modules[parent] = types.ModuleType(parent)
-        sys.modules[parent].__path__ = []  # mark as package
-    path = os.path.join(_REPO_ROOT, relative_path)
-    spec = importlib.util.spec_from_file_location(module_name, path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
+from tests.source_loader import (
+    keep_modules, load_source, restore_modules, stub_account_macro,
+)
 
 
 class JinjaHelpTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        get_acc = sys.modules['application.helpers.get_account']
-        if not hasattr(get_acc, 'get_account_variable'):
-            get_acc.get_account_variable = lambda macro: None
-        cls._stubs = {name: sys.modules.get(name) for name in (
+        stub_account_macro()
+        cls._stubs = keep_modules((
             'application.helpers.syncer_jinja',
             'application.helpers.jinja_help',
+            'application.helpers.lookup_table',
             'application.models.lookup_table',
-        )}
-        cls.jinja = _load_source(
+        ))
+        load_source('application.helpers.lookup_table',
+                    'application/helpers/lookup_table.py')
+        cls.jinja = load_source(
             'application.helpers.syncer_jinja',
-            os.path.join('application', 'helpers', 'syncer_jinja.py'))
-        cls.help = _load_source(
+            'application/helpers/syncer_jinja.py')
+        cls.help = load_source(
             'application.helpers.jinja_help',
-            os.path.join('application', 'helpers', 'jinja_help.py'))
+            'application/helpers/jinja_help.py')
         cls.model = types.ModuleType('application.models.lookup_table')
         cls.lookup_table = MagicMock(name='LookupTable')
         cls.model.LookupTable = cls.lookup_table
@@ -57,11 +43,7 @@ class JinjaHelpTest(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        for name, module in cls._stubs.items():
-            if module is None:
-                sys.modules.pop(name, None)
-            else:
-                sys.modules[name] = module
+        restore_modules(cls._stubs)
 
     def test_every_function_has_help(self):
         builtin = self.jinja.SandboxedEnvironment().globals
@@ -109,14 +91,19 @@ class JinjaHelpTest(unittest.TestCase):
         self.assertIn('host secret', {entry['name'] for entry in entries})
 
     def test_lookup_tables_list_their_key_and_columns(self):
-        table = MagicMock(entries='location;datacenter;owner\nsite-a;DC1;team-a\n')
+        table = MagicMock(entries='location;datacenter;owner\nsite-a;DC1;team-a\n',
+                          mode='key_value')
         table.name = 'datacenters'
-        empty = MagicMock(entries='')
+        rows = MagicMock(entries='site;owner\nsite-a;team-a\n', mode='table')
+        rows.name = 'owners'
+        empty = MagicMock(entries='', mode='key_value')
         empty.name = 'empty'
         query = self.lookup_table.objects.only.return_value.order_by
-        query.return_value = [table, empty]
+        query.return_value = [table, rows, empty]
         self.assertEqual(self.help.lookup_tables(), [
-            {'name': 'datacenters', 'key': 'location',
+            {'name': 'datacenters', 'mode': 'key_value', 'key': 'location',
              'columns': ['datacenter', 'owner']},
-            {'name': 'empty', 'key': '', 'columns': []},
+            {'name': 'owners', 'mode': 'table', 'key': '',
+             'columns': ['site', 'owner']},
+            {'name': 'empty', 'mode': 'key_value', 'key': '', 'columns': []},
         ])
