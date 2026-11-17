@@ -6,4 +6,4 @@
   become: true
   ansible.builtin.command:
     argv: [dnf, install, -y, --nogpgcheck, "/tmp/{{ cmk_version_filename }}"]
-  when: checkmk_version_installed.stdout != cmk_version
+  when: cmk_version_missing | bool
