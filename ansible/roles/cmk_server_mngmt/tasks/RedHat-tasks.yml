@@ -5,4 +5,4 @@
     name: "/tmp/{{ cmk_version_filename }}"
     state: present
     disable_gpg_check: true
-  when: checkmk_version_installed.stdout != cmk_version
+  when: cmk_version_missing | bool

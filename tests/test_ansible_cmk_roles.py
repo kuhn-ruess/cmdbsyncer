@@ -383,5 +383,55 @@ class SiteUpdateResultTest(unittest.TestCase):
         self.assertEqual(defaults['cmk_preflight'], 'abort')
 
 
+@unittest.skipUnless(_ansible_playbook(), 'ansible-playbook not installed')
+class InstalledVersionTest(unittest.TestCase):
+    """The installer is only copied and installed when omd lacks exactly
+    this version and edition; a grep for the version alone also hit
+    2.5.0p19 for 2.5.0p1 and installed again on every run."""
+
+    def _missing(self, installed):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        os.mkdir(os.path.join(tmp, 'bin'))
+        omd = os.path.join(tmp, 'bin', 'omd')
+        with open(omd, 'w', encoding='utf-8') as handle:
+            handle.write('#!/bin/bash\nprintf "$OMD_VERSIONS"\n')
+        os.chmod(omd, 0o755)
+        tasks = [task for task in _load(os.path.join(_ROLES, 'cmk_server_mngmt', 'tasks',
+                                                     'main.yml'))
+                 if 'Version is' in task.get('name', '')]
+        self.assertEqual(len(tasks), 2)
+        result = os.path.join(tmp, 'result')
+        tasks.append({'ansible.builtin.copy': {'dest': result,
+                                               'content': '{{ cmk_version_missing | bool }}'}})
+        play = [{'hosts': 'all', 'gather_facts': False, 'tasks': tasks, 'vars': {
+            'cmk_version': '2.5.0p1', 'cmk_edition': 'pro'}}]
+        with open(os.path.join(tmp, 'play.yml'), 'w', encoding='utf-8') as handle:
+            yaml.safe_dump(play, handle)
+        env = dict(os.environ, ANSIBLE_NOCOLOR='1', OMD_VERSIONS=installed,
+                   PATH=os.path.join(tmp, 'bin') + os.pathsep + os.environ['PATH'],
+                   ANSIBLE_LOCAL_TEMP=os.path.join(tmp, 'local'),
+                   ANSIBLE_REMOTE_TEMP=os.path.join(tmp, 'remote'))
+        proc = subprocess.run(
+            [_ansible_playbook(), '-i', 'srv01,', '-c', 'local',
+             '-e', f'ansible_python_interpreter={sys.executable}',
+             os.path.join(tmp, 'play.yml')],
+            stdin=subprocess.DEVNULL, capture_output=True, text=True, env=env,
+            timeout=300, check=False)
+        self.assertEqual(proc.returncode, 0, proc.stdout[-2000:])
+        with open(result, encoding='utf-8') as handle:
+            return handle.read()
+
+    def test_installed(self):
+        self.assertEqual(self._missing('2.4.0p20.cee\\n2.5.0p1.pro\\n2.5.0p1.ultimate\\n'),
+                         'False')
+
+    def test_other_patch_or_edition_is_missing(self):
+        self.assertEqual(self._missing('2.5.0p19.pro\\n2.5.0p1.community\\n'), 'True')
+
+    def test_no_omd_yet(self):
+        self.assertEqual(self._missing(''), 'True')
+
+
 if __name__ == '__main__':
     unittest.main()

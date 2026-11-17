@@ -32,21 +32,25 @@
   when: not installation_file.stat.exists
   delegate_to: localhost
 
+# Exact match on version and edition: a grep for the version alone also
+# hit 2.5.0p19 for 2.5.0p1 or gave two lines for two editions, and then
+# installed again on every run.
 - name: "Check if Version is already installed on the Servers"
-  ansible.builtin.shell: |
-    set -o pipefail
-    omd versions | egrep -o {{ cmk_version }}
-  args:
-    executable: /bin/bash
+  ansible.builtin.command:
+    argv: [omd, versions, --bare]
   register: checkmk_version_installed
   changed_when: false
-  ignore_errors: yes
+  failed_when: false
+
+- name: "Remember if the Version is installed"
+  ansible.builtin.set_fact:
+    cmk_version_missing: "{{ (cmk_version ~ '.' ~ cmk_edition) not in (checkmk_version_installed.stdout_lines | default([])) }}"
 
 - name: "Copy Installation File to Servers"
   ansible.builtin.copy:
     src: "{{ cmk_local_staging }}/{{ cmk_version_filename }}"
     dest: "/tmp/{{ cmk_version_filename }}"
-  when: checkmk_version_installed.stdout != cmk_version
+  when: cmk_version_missing | bool
 
 - ansible.builtin.include_tasks: "{{ ansible_os_family }}-tasks.yml"
 
