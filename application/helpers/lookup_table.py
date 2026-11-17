@@ -123,6 +123,18 @@ def lookup(table, key, column=None, default=''):
     return row.get(column) or default
 
 
+def lookup_keys(table):
+    """
+    The values in the first column of the lookup table ``table`` as a
+    set, or None when there is no such table.
+    """
+    loaded = _get_table(table)
+    if not loaded:
+        return None
+    _columns, _rows, index = loaded
+    return set(index)
+
+
 def lookup_rows(table):
     """
     Every row of the lookup table ``table``, in the order of the table,

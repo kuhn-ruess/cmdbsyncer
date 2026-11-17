@@ -12,11 +12,32 @@
         "data_key": "result",
         "method": "GET",
         "post_body": "{}",
+        "page_limit": "",
+        "page_offset_field": "offset",
+        "page_limit_field": "limit",
         "hostname_field": "host",
         "rewrite_hostname": "",
+        "filter_field": "",
+        "filter_lookup_table": "",
         "verify_cert": "True",
         "ca_cert_chain": "",
         "ca_root_cert": "",
         "path": ""
+    },
+    "account_custom_field_help": {
+        "auth_type": "basic or digest sends Username and Password of the account with every request. Empty sends no login, e.g. when the API wants a key in request_headers.",
+        "cert": "Path to a client certificate file on the Syncer server, for an API that wants one. Empty sends none.",
+        "request_headers": "HTTP headers of every request, as a Python dict. Example: {'Content-Type': 'application/json', 'Authorization': 'my-api-key'}",
+        "data_key": "Key of the response that holds the list of records. Example: result for {\"result\": [...]}. Empty when the response is the list itself.",
+        "method": "GET or POST. POST sends post_body.",
+        "post_body": "Body of a POST request, JSON. Jinja is rendered first, so a loop over lookup_rows('table') can build a filter from a lookup table.",
+        "page_limit": "Records per request, sent as value of page_limit_field. Set it to read the API page by page: the Syncer asks again with a higher offset until a page brings fewer records than this. Empty reads everything with one request.",
+        "page_offset_field": "Name of the API parameter for the number of records to skip, used with page_limit. A GET sends it as URL parameter, a POST adds it to post_body. Default: offset",
+        "page_limit_field": "Name of the API parameter for the number of records per page, used with page_limit. Its value is page_limit. Default: limit",
+        "hostname_field": "Field of a record the host is named after. A record without it is skipped.",
+        "rewrite_hostname": "Jinja template that builds the hostname, with HOSTNAME as the value of hostname_field and every field of the record available. Example: {{ HOSTNAME | lower }}",
+        "filter_field": "Field of a record that is checked against filter_lookup_table. Only records whose value is in the first column of that table are imported, all others are skipped. Empty imports every record.",
+        "filter_lookup_table": "Name of the lookup table (Modules > Lookup Tables) used by filter_field. Its first column holds the allowed values, written exactly as the API delivers them. The import stops with an error when the table does not exist.",
+        "path": "Path to a JSON file on the Syncer server, read instead of calling the API. Empty calls the API."
     }
 }
