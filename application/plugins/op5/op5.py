@@ -77,8 +77,11 @@ class Op5(Plugin):
                 "columns": ",".join(self.columns()),
                 "format": "json",
                 "limit": str(self.page_size),
-                "offset": str(offset),
             }
+            # OP5 refuses offset=0 ("must be a positive number"), the
+            # first page goes out without one
+            if offset:
+                params["offset"] = str(offset)
             response = self.inner_request(method="GET", url=url, params=params, auth=auth)
             hosts = response.json()
             if not isinstance(hosts, list):

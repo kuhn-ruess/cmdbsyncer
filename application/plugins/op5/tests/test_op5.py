@@ -62,6 +62,8 @@ class TestOp5(unittest.TestCase):
         self.assertEqual(first_call['url'], 'https://op5.example.com/api/filter/query')
         self.assertEqual(first_call['auth'], ('user', 'secret'))
         self.assertEqual(first_call['params']['query'], '[hosts] all')
+        # OP5 refuses offset=0
+        self.assertNotIn('offset', first_call['params'])
         self.assertEqual(op5.inner_request.call_args_list[1].kwargs['params']['offset'], '2')
 
     def test_error_answer_raises(self):
