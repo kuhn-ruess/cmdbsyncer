@@ -1,17 +1,30 @@
 """
 Query a ServiceNow table from the web interface
 """
-from flask import request
+from flask import flash, redirect, request, url_for
 from flask_admin import BaseView, expose
 from flask_login import current_user
 
-from application.models.account import Account
+from application.models.account import Account, CustomEntry
 from application.models.host import Host
 
 from .syncer import ServiceNowError, SyncServiceNow
 
 DEFAULT_LIMIT = 25
 MAX_LIMIT = 500
+
+
+def saved_tables(current, table):
+    """
+    The table list of an account after a save: a table the account does
+    not read yet replaces a single one and joins several
+    """
+    tables = [x.strip() for x in current.split(',') if x.strip()]
+    if not table or table in tables:
+        return ','.join(tables)
+    if len(tables) <= 1:
+        return table
+    return ','.join(tables + [table])
 
 
 class ServiceNowQueryView(BaseView):
@@ -79,7 +92,8 @@ class ServiceNowQueryView(BaseView):
             # settings of the account to start from.
             syncer.config['api_path'] = form['api_path']
             syncer.config['sysparm_query'] = form['sysparm_query']
-            syncer.config['sysparm_fields'] = form['sysparm_fields']
+            # "All fields" keeps the list in the form for the next try
+            syncer.config['sysparm_fields'] = '' if form['all_fields'] else form['sysparm_fields']
             syncer.config['sysparm_display_value'] = form['sysparm_display_value']
             if form['hostname_field']:
                 syncer.config['hostname_field'] = form['hostname_field']
@@ -107,6 +121,7 @@ class ServiceNowQueryView(BaseView):
             'sysparm_fields': args.get('sysparm_fields', '').strip(),
             'sysparm_display_value': args.get('sysparm_display_value', 'true'),
             'limit': args.get('limit', str(DEFAULT_LIMIT)),
+            'all_fields': args.get('all_fields') == '1',
         }
 
         error = None
@@ -130,4 +145,43 @@ class ServiceNowQueryView(BaseView):
             result=result,
             comparison=comparison,
             error=error,
+            may_save=current_user.has_right('account'),
         )
+
+    @expose('/save-account', methods=('POST',))
+    def save_account(self):
+        """
+        Write the settings of the form into the account, so what was
+        debugged here is what the next import does
+        """
+        values = request.form
+        name = values.get('account', '')
+        account = Account.objects(name=name, type='servicenow').first()
+        if not current_user.has_right('account'):
+            flash("Saving into an account needs the right to edit accounts", 'danger')
+        elif not account:
+            flash(f"Account '{name}' not found", 'danger')
+        else:
+            settings = {
+                'tables': saved_tables(account.custom_field('tables'),
+                                             values.get('table', '').strip()),
+                'api_path': values.get('api_path', '').strip(),
+                'hostname_field': values.get('hostname_field', '').strip(),
+                'sysparm_query': values.get('sysparm_query', '').strip(),
+                # "All fields" is what the query asked for
+                'sysparm_fields': '' if values.get('all_fields') == '1'
+                                  else values.get('sysparm_fields', '').strip(),
+            }
+            # Only these fields change, the rest of the account stays as
+            # it is
+            accounts = Account.objects(name=name, type='servicenow')
+            for field, value in settings.items():
+                if not accounts(custom_fields__name=field).update(
+                        set__custom_fields__S__value=value):
+                    accounts.update(push__custom_fields=CustomEntry(name=field, value=value))
+            flash(f"Settings saved into account '{name}', tables: {settings['tables']}",
+                  'success')
+        back = {key: values.get(key, '') for key in
+                ('account', 'table', 'api_path', 'hostname_field', 'sysparm_query',
+                 'sysparm_fields', 'sysparm_display_value', 'limit', 'all_fields')}
+        return redirect(url_for('.index', **{k: v for k, v in back.items() if v}))

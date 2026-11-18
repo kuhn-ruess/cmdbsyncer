@@ -74,19 +74,38 @@
                     <input type="text" class="form-control" id="sysparm_query"
                            name="sysparm_query" value="{{ form.sysparm_query }}"
                            placeholder="every record of the table"/>
+                    <textarea class="form-control text-monospace" id="query_editor"
+                              spellcheck="false" style="display: none;"></textarea>
                     <small class="form-text text-muted">
                         Encoded query, e.g. <code>operational_status=1</code>.
                         Empty asks for every record.
+                        <a href="#" id="query_edit_toggle">Edit as list</a>
+                        <span class="list-help" style="display: none;">
+                            A line starts a condition (<code>^</code>), an
+                            indented line is one more value of the list above
+                            (<code>,</code>).
+                        </span>
                     </small>
                 </div>
                 <div class="form-group col-md-5">
                     <label for="sysparm_fields">Fields (sysparm_fields)</label>
+                    <div class="form-check form-check-inline float-right mr-0">
+                        <input class="form-check-input" type="checkbox" id="all_fields"
+                               name="all_fields" value="1"
+                               {% if form.all_fields %}checked{% endif %}/>
+                        <label class="form-check-label" for="all_fields">All fields</label>
+                    </div>
                     <input type="text" class="form-control" id="sysparm_fields"
                            name="sysparm_fields" value="{{ form.sysparm_fields }}"
-                           placeholder="all fields"/>
+                           placeholder="all fields"
+                           {% if form.all_fields %}readonly{% endif %}/>
+                    <textarea class="form-control text-monospace" id="fields_editor"
+                              spellcheck="false" style="display: none;"
+                              {% if form.all_fields %}readonly{% endif %}></textarea>
                     <small class="form-text text-muted">
-                        Comma separated. Empty asks for every field of the
-                        found records.
+                        Comma separated. Empty or <em>All fields</em> asks
+                        for every field of the found records.
+                        <a href="#" id="fields_edit_toggle">Edit as list</a>
                     </small>
                 </div>
                 <div class="form-group col-md-2">
@@ -114,14 +133,31 @@
                     {% if not accounts %}disabled{% endif %}>
                 <i class="fa fa-balance-scale"></i> Compare with Syncer
             </button>
+            {% if may_save %}
+            <button type="button" class="btn btn-outline-primary ml-2" id="account_save"
+                    {% if not accounts %}disabled{% endif %}>
+                <i class="fa fa-save"></i> Save into account
+            </button>
+            {% endif %}
             <small class="form-text text-muted">
                 Compare reads every record of the table with the query and
                 holds the names against the hosts an export of the syncer
                 would send. Max. results does not apply, a large table
                 takes a while.
+                {% if may_save %}
+                Save into account writes table, API path, hostname field,
+                query and fields (none with <em>All fields</em>) into the
+                account, so the next import works the same way.
+                {% endif %}
             </small>
         </div>
     </form>
+
+    {% if may_save %}
+    <form method="POST" action="{{ url_for('.save_account') }}" id="query_save_form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    </form>
+    {% endif %}
 
     {% if error %}
     <div class="alert alert-danger">
@@ -312,6 +348,112 @@
             // On a result page the account is already chosen, only its
             // table list is missing
             offerTables(current());
+
+            // The query as one condition per line and one list value per
+            // indented line. Splitting on ^ and , and joining with them
+            // again gives back the same query, only empty values drop out.
+            function expand(value) {
+                return value.split('^').filter(function (part) { return part; })
+                    .map(function (part) {
+                        return part.split(',').filter(function (item, i) {
+                            return i === 0 || item.trim();
+                        }).join('\n    ');
+                    }).join('\n');
+            }
+
+            function collapse(text) {
+                var conditions = [];
+                text.split('\n').forEach(function (line) {
+                    if (!line.trim()) { return; }
+                    if (/^\s/.test(line) && conditions.length) {
+                        conditions[conditions.length - 1] += ',' + line.trim();
+                    } else {
+                        conditions.push(line.trim());
+                    }
+                });
+                return conditions.join('^');
+            }
+
+            // The field list, one field per line
+            function expandFields(value) {
+                return value.split(',').map(function (item) { return item.trim(); })
+                    .filter(function (item) { return item; }).join('\n');
+            }
+
+            function collapseFields(text) {
+                return text.split('\n').map(function (line) { return line.trim(); })
+                    .filter(function (line) { return line; }).join(',');
+            }
+
+            // A list in place of the one line field, kept in step with it.
+            // The hidden field is still what the form sends.
+            function listEditor(toggleId, editorId, input, toList, fromList) {
+                var toggle = document.getElementById(toggleId);
+                var area = document.getElementById(editorId);
+                var help = toggle.parentNode.querySelector('.list-help');
+
+                function fit() {
+                    area.rows = Math.min(Math.max(area.value.split('\n').length, 3), 20);
+                }
+
+                toggle.addEventListener('click', function (event) {
+                    event.preventDefault();
+                    var open = area.style.display === 'none';
+                    area.style.display = open ? '' : 'none';
+                    input.style.display = open ? 'none' : '';
+                    if (help) { help.style.display = open ? '' : 'none'; }
+                    toggle.textContent = open ? 'Edit as line' : 'Edit as list';
+                    if (open) {
+                        area.value = toList(input.value);
+                        fit();
+                        area.focus();
+                    }
+                });
+                area.addEventListener('input', function () {
+                    input.value = fromList(area.value);
+                    fit();
+                });
+                account.addEventListener('change', function () {
+                    area.value = toList(input.value);
+                    fit();
+                });
+            }
+            listEditor('query_edit_toggle', 'query_editor',
+                       fields.sysparm_query, expand, collapse);
+            listEditor('fields_edit_toggle', 'fields_editor',
+                       fields.sysparm_fields, expandFields, collapseFields);
+
+            var save = document.getElementById('account_save');
+            if (save) {
+                save.addEventListener('click', function () {
+                    if (!account.value) { return; }
+                    if (!confirm('Write table, API path, hostname field, query and fields'
+                                 + ' into the account "' + account.value
+                                 + '"? The next import uses them.')) { return; }
+                    var target = document.getElementById('query_save_form');
+                    var values = {
+                        account: account.value,
+                        limit: document.getElementById('limit').value,
+                        all_fields: allFields.checked ? '1' : ''
+                    };
+                    Object.keys(fields).forEach(function (key) { values[key] = fields[key].value; });
+                    Object.keys(values).forEach(function (key) {
+                        var input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = key;
+                        input.value = values[key];
+                        target.appendChild(input);
+                    });
+                    target.submit();
+                });
+            }
+
+            // "All fields" keeps the list for later, it is only not sent
+            var allFields = document.getElementById('all_fields');
+            allFields.addEventListener('change', function () {
+                fields.sysparm_fields.readOnly = allFields.checked;
+                document.getElementById('fields_editor').readOnly = allFields.checked;
+            });
 
             // A count of the comparison opens the list of its names
             document.querySelectorAll('.compare-open').forEach(function (link) {
