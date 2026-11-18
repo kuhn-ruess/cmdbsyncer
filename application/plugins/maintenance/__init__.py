@@ -28,6 +28,7 @@ from application.helpers.stale_indexes import drop_stale_indexes
 from application.helpers.get_account import get_account_by_name
 from application.helpers.retention import sync_all
 from application.helpers.plugins import register_cli_group
+from application.helpers import crontab, shell_setup
 
 
 _cli_sys = register_cli_group(app, 'sys', 'maintenance', "Syncer Commands")
@@ -960,6 +961,54 @@ def self_configure():
     sync_folderpools()
     print("Sync Checkmk Site Pools")
     sync_sitepools()
+
+#.
+#   .-- Command: Shell setup for the current user
+@_cli_sys.command('setup_shell')
+@click.option('--print', 'print_only', is_flag=True,
+              help="Only print what would be written, change nothing")
+@click.option('--debug', is_flag=True)
+def setup_shell(print_only, debug):  # pylint: disable=unused-argument
+    """
+    Set up the bash of the current user for the Syncer: every login gets
+    the venv active, the configuration found from any directory and tab
+    completion for cmdbsyncer. Run it as the user that works with the
+    Syncer, e.g. the service user: sudo -iu cmdbsyncer cmdbsyncer sys setup_shell
+
+    Example: cmdbsyncer sys setup_shell
+    """
+    directory = crontab.config_dir()
+    if not directory:
+        print(f"{CC.FAIL}No local_config.py found, run "
+              f"'cmdbsyncer sys self_configure' first{CC.ENDC}")
+        raise SystemExit(1)
+    home = os.path.expanduser('~')
+    bashrc = os.path.join(home, '.bashrc')
+    new_block = shell_setup.block(directory, shell_setup.venv_activate())
+    login_fix = shell_setup.login_file_fix(home)
+    if print_only:
+        print(f"# {bashrc}\n{new_block}")
+        if login_fix:
+            print(f"# {login_fix[0]}{login_fix[1]}")
+        return
+
+    try:
+        script = shell_setup.completion_script(crontab.syncer_binary())
+    except shell_setup.ShellSetupError as error:
+        print(f"{CC.FAIL}{error}{CC.ENDC}")
+        raise SystemExit(1) from error
+    current = Path(bashrc).read_text(encoding='utf-8') if os.path.isfile(bashrc) else ''
+    Path(bashrc).write_text(shell_setup.with_block(current, new_block), encoding='utf-8')
+    Path(home, shell_setup.COMPLETION_FILE).write_text(script, encoding='utf-8')
+    print(f"{CC.OKGREEN}Updated {bashrc}{CC.ENDC}")
+    if login_fix:
+        with open(login_fix[0], 'a', encoding='utf-8') as handle:
+            handle.write(login_fix[1])
+        print(f"{CC.OKGREEN}{login_fix[0]} now reads ~/.bashrc at login{CC.ENDC}")
+    print("Active with the next login, or now with: . ~/.bashrc")
+    if 'bash' not in os.environ.get('SHELL', 'bash'):
+        print(f"{CC.WARNING}The login shell of this user is {os.environ['SHELL']}, "
+              f"the setup is for bash (e.g. usermod -s /bin/bash <user>){CC.ENDC}")
 
 #.
 #   .-- Command: Install default Ansible playbooks

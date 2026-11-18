@@ -614,6 +614,12 @@ _load_real_module(
     os.path.join("helpers", "crontab.py"),
 )
 
+# Pure standard-library helper behind `sys setup_shell`
+_load_real_module(
+    "application.helpers.shell_setup",
+    os.path.join("helpers", "shell_setup.py"),
+)
+
 # Loaded for real: it only reads app.config, and the label-history tests
 # exercise its retention clamping through it.
 _load_real_module(
