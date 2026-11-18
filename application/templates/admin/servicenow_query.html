@@ -130,6 +130,15 @@
     {% endif %}
 
     {% if comparison %}
+    {# Syncer names link to their host, ServiceNow-only names have none #}
+    {% set compare_lists = [
+        {'id': 'compare-matched', 'title': 'Found in both', 'badge': 'success',
+         'names': comparison.matched, 'hosts': True},
+        {'id': 'compare-missing-in-snow', 'title': 'Syncer hosts missing in ServiceNow',
+         'badge': 'warning', 'names': comparison.missing_in_snow, 'hosts': True},
+        {'id': 'compare-missing-in-syncer', 'title': 'ServiceNow names without Syncer host',
+         'badge': 'secondary', 'names': comparison.missing_in_syncer, 'hosts': False},
+    ] %}
     <p>
         Used request: <code>{{ comparison.url }}</code><br/>
         {% for key, value in comparison.params.items() | sort %}
@@ -150,26 +159,37 @@
                         <td>{{ comparison.snow_names }}</td></tr>
                     <tr><th>Hosts in the Syncer</th>
                         <td>{{ comparison.syncer_hosts }}</td></tr>
-                    <tr><th>Found in both</th>
-                        <td><span class="badge badge-success">{{ comparison.matched }}</span></td></tr>
-                    <tr><th>Syncer hosts missing in ServiceNow</th>
-                        <td><span class="badge badge-warning">{{ comparison.missing_in_snow | length }}</span></td></tr>
-                    <tr><th>ServiceNow names without Syncer host</th>
-                        <td><span class="badge badge-secondary">{{ comparison.missing_in_syncer | length }}</span></td></tr>
+                    {% for list in compare_lists %}
+                    <tr><th>{{ list.title }}</th>
+                        <td>
+                            {%- if list.names -%}
+                            <a href="#{{ list.id }}" class="badge badge-{{ list.badge }} compare-open"
+                               title="Show the names">{{ list.names | length }}</a>
+                            {%- else -%}
+                            <span class="badge badge-{{ list.badge }}">0</span>
+                            {%- endif -%}
+                        </td></tr>
+                    {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
 
-    {% for title, names in [('Syncer hosts missing in ServiceNow', comparison.missing_in_snow),
-                            ('ServiceNow names without Syncer host', comparison.missing_in_syncer)] %}
-    {% if names %}
-    <details class="mb-3">
-        <summary>{{ title }} ({{ names | length }})</summary>
-        <textarea class="form-control mt-2" rows="{{ [names | length, 15] | min }}"
-                  readonly>{{ names | join('\n') }}</textarea>
+    {% for list in compare_lists if list.names %}
+    <details class="mb-3" id="{{ list.id }}">
+        <summary>{{ list.title }} ({{ list.names | length }})</summary>
+        <div class="card app-card mt-2" style="max-height: 25rem; overflow-y: auto;">
+            <div class="card-body py-2">
+                {% for name in list.names %}
+                <div>
+                    {%- if list.hosts -%}
+                    <a href="{{ url_for('host.debug', hostname=name) }}">{{ name }}</a>
+                    {%- else -%}{{ name }}{%- endif -%}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
     </details>
-    {% endif %}
     {% endfor %}
     {% endif %}
 
@@ -292,6 +312,14 @@
             // On a result page the account is already chosen, only its
             // table list is missing
             offerTables(current());
+
+            // A count of the comparison opens the list of its names
+            document.querySelectorAll('.compare-open').forEach(function (link) {
+                link.addEventListener('click', function () {
+                    var list = document.getElementById(link.getAttribute('href').slice(1));
+                    if (list) { list.open = true; }
+                });
+            });
         })();
     </script>
 </div>

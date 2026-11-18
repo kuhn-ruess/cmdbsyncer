@@ -723,7 +723,7 @@ class SyncServiceNow(Plugin):
             'unnamed': unnamed,
             'snow_names': len(in_snow),
             'syncer_hosts': len(in_syncer),
-            'matched': len(in_snow.keys() & in_syncer.keys()),
+            'matched': sorted(in_syncer[x] for x in in_snow.keys() & in_syncer.keys()),
             'missing_in_snow': sorted(in_syncer[x] for x in in_syncer.keys() - in_snow.keys()),
             'missing_in_syncer': sorted(in_snow[x] for x in in_snow.keys() - in_syncer.keys()),
         }

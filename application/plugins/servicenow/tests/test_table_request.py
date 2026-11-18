@@ -335,7 +335,7 @@ class TestCompareHosts(unittest.TestCase):
                                    ['srv01', 'srv03'])
         self.assertEqual(result['records'], 3)
         self.assertEqual(result['unnamed'], 1)
-        self.assertEqual(result['matched'], 1)
+        self.assertEqual(result['matched'], ['srv01'])
         self.assertEqual(result['missing_in_snow'], ['srv03'])
         self.assertEqual(result['missing_in_syncer'], ['srv02'])
 
@@ -349,7 +349,7 @@ class TestCompareHosts(unittest.TestCase):
             result, asked = self._compare([{'name': 'srv01'}], ['srv01.example.com'],
                                           rewrite_hostname='{{ HOSTNAME }}.example.com')
         self.assertEqual(asked, [None])
-        self.assertEqual(result['matched'], 1)
+        self.assertEqual(result['matched'], ['srv01.example.com'])
 
 
 class TestInventorizeTables(unittest.TestCase):
