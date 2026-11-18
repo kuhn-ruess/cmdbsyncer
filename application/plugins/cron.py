@@ -7,6 +7,7 @@ import click
 from mongoengine.errors import DoesNotExist
 
 from application import app, cron_register, log
+from application.enterprise import run_hook
 from application.helpers import crontab
 from application.helpers.task_status import take_task_failure
 from application.modules.debug import ColorCodes as CC
@@ -108,6 +109,16 @@ def _reset_stale_lock(stats):
 def _cli_cron():
     """Cronjob Runner"""
 
+
+def _register_dynamic_tasks():
+    """
+    Tasks that exist once per database record, like one per backup
+    configuration, are registered from the database. The web interface
+    does that when it mounts its views, the CLI has none, so a cron run
+    asks for them here. A no-op without such tasks.
+    """
+    run_hook('register_cron_tasks')
+
 def get_stats(group):
     """
     Return Stats Object
@@ -197,6 +208,7 @@ def run_job(group_name):
     Run Given Group directly
     Raise on errors
     """
+    _register_dynamic_tasks()
     try:
         job = CronGroup.objects.get(enabled=True, name=group_name)
         for task in job.jobs:
@@ -211,6 +223,7 @@ def jobs():  # pylint: disable=too-many-branches,too-many-statements
     Run all configured Jobs
     """
     Config.objects().update(set__last_cron_pass=datetime.now())
+    _register_dynamic_tasks()
     checked = 0
     started = []
     for job in CronGroup.objects(enabled=True).order_by('sort_field'):
