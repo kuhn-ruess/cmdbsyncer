@@ -5,7 +5,7 @@ import ssl
 
 from application import log
 from application.helpers.get_account import get_account_by_name
-from application.helpers.import_hostnames import get_import_hosts, import_hostnames
+from application.helpers.import_hostnames import claim_host, get_import_hosts, import_hostnames
 from application.modules.debug import ColorCodes, attribute_table
 
 try:
@@ -449,7 +449,7 @@ def ldap_import(account, debug=False):
     for source_name, labels in _inner_import(config):
         for hostname, host_obj in get_import_hosts(source_name, config, labels):
             print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
-            do_save = host_obj.set_account(account_dict=config)
+            do_save = claim_host(host_obj, config)
             host_obj.update_host(labels)
             if do_save:
                 print(f" {ColorCodes.OKGREEN} * {ColorCodes.ENDC} Updated Labels")

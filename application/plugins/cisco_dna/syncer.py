@@ -7,7 +7,7 @@ from requests.auth import HTTPBasicAuth
 
 from application import app
 from application.models.host import Host
-from application.helpers.import_hostnames import get_import_hosts
+from application.helpers.import_hostnames import claim_host, get_import_hosts
 from application.modules.debug import ColorCodes
 
 # Default HTTP timeout for Cisco DNA calls; without it the importer
@@ -265,7 +265,7 @@ class CiscoDNA():
             for _name, db_host in get_import_hosts(hostname, self.account_dict, device):
                 db_host.update_inventory('cisco_dna_', inventory)
                 db_host.sync_id = device['id']
-                do_save = db_host.set_account(account_dict=self.account_dict)
+                do_save = claim_host(db_host, self.account_dict)
                 if do_save:
                     db_host.save()
                 else:

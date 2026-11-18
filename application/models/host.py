@@ -62,6 +62,15 @@ class HostError(Exception):
     Errors related to host updates or creation
     """
 
+
+class InvalidHostnameError(HostError):
+    """
+    The name of one record can not become a host: not a string, not a
+    valid hostname or no FQDN where the account asks for one. An import
+    skips that record and goes on with the next.
+    """
+
+
 def get_cmdb_model_fields(object_type='host'):
     """
     Configured CMDB fields for the given object type, merged with the
@@ -219,13 +228,14 @@ class Host(HostLabelsMixin, db.Document):
         if self.object_type == 'host' \
                 and account_dict.get('check_for_valid_hostname', False) \
                 and not self.is_valid_hostname():
-            raise HostError(f"{self.hostname} is not a valid Hostname,"
-                            "but object type for import is set to host")
+            raise InvalidHostnameError(f"{self.hostname} is not a valid Hostname,"
+                                       "but object type for import is set to host")
         if self.object_type != 'template' \
                 and account_dict.get('require_fqdn', False) \
                 and not self.is_fqdn():
-            raise HostError(f"{self.hostname} is not a fully-qualified domain "
-                            "name (require_fqdn is enabled on the account)")
+            raise InvalidHostnameError(f"{self.hostname} is not a fully-qualified "
+                                       "domain name (require_fqdn is enabled on "
+                                       "the account)")
 
     def __str__(self):
         return f"{self.object_type}: {self.hostname} ({self.source_account_name})"
@@ -378,7 +388,7 @@ class Host(HostLabelsMixin, db.Document):
         # Check the type first: a source handing over None or a number must
         # reach the caller as HostError, not as AttributeError from .strip().
         if not isinstance(hostname, str):
-            raise HostError("Hostname field does not contain a string")
+            raise InvalidHostnameError("Hostname field does not contain a string")
         hostname = hostname.strip()
         if app.config['LOWERCASE_HOSTNAMES']:
             hostname = hostname.lower()

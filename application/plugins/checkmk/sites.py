@@ -1,6 +1,7 @@
 """
 Checkmk Sites
 """
+from application.helpers.import_hostnames import claim_host
 from application.plugins.checkmk.cmk2 import CMK2
 from syncerapi.v1 import cc, Host
 
@@ -38,7 +39,7 @@ class CheckmkSites(CMK2):
             # importer does — otherwise these objects miss conflict
             # protection, inventory sync attribution and cannot be
             # cleaned up via the normal account lifecycle.
-            do_save = syncer_object.set_account(account_dict=self.config)
+            do_save = claim_host(syncer_object, self.config)
             if not do_save:
                 print(f"{cc.OKBLUE} *{cc.ENDC} Site {object_name} "
                       "owned by different source, ignored")

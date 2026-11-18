@@ -20,6 +20,7 @@ import requests
 from requests.utils import select_proxy
 from application import logger, app, log
 from application.models.account import pop_master_skips
+from application.helpers.import_hostnames import pop_invalid_hostnames
 from application.helpers.syncer_jinja import render_jinja
 from application.helpers.shadow_data import shadow_view_active
 from application.helpers.task_status import task_failed
@@ -479,6 +480,8 @@ class Plugin():
             return
         if skipped := pop_master_skips():
             self.log_details.append(('skipped', skipped))
+        if invalid := pop_invalid_hostnames():
+            self.log_details.append(('skipped', invalid))
         duration = time.time() - self.start_time
         self.log_details.append(('duration', duration))
         self.log_details.append(('ended', datetime.now()))

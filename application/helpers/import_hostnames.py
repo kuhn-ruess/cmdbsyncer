@@ -16,7 +16,7 @@ goes through here.
 import ast
 
 from application import app
-from application.models.host import Host
+from application.models.host import Host, InvalidHostnameError
 
 
 def parse_hostname_list(value):
@@ -82,6 +82,37 @@ def import_hostnames(hostname, config, attributes):
     return names
 
 
+# Names an import skipped as invalid. Buffered like the master skips:
+# the Host model has no handle on the running plugin, `Plugin.save_log`
+# drains it into the run's log entry. Only a sample of names is kept.
+_INVALID_NAMES = {'count': 0, 'names': []}
+_INVALID_NAME_SAMPLE = 20
+
+
+def report_invalid_hostname(hostname, error):
+    """Skip *hostname* for *error*: to the CLI now, to the run's log later"""
+    print(f"Host {hostname} skipped: {error}")
+    _INVALID_NAMES['count'] += 1
+    if len(_INVALID_NAMES['names']) < _INVALID_NAME_SAMPLE:
+        _INVALID_NAMES['names'].append(str(hostname))
+
+
+def pop_invalid_hostnames():
+    """
+    Drain the skipped names since the last call as one log-detail line,
+    empty string when there were none.
+    """
+    count = _INVALID_NAMES['count']
+    names = _INVALID_NAMES['names']
+    _INVALID_NAMES.update(count=0, names=[])
+    if not count:
+        return ''
+    message = ', '.join(names)
+    if count > len(names):
+        message += f" and {count - len(names)} more"
+    return f"{count} record(s) skipped for an invalid hostname: {message}"
+
+
 def get_import_hosts(hostname, config, attributes, create=True):
     """
     The hosts one record is imported into, as (hostname, host) pairs.
@@ -92,8 +123,27 @@ def get_import_hosts(hostname, config, attributes, create=True):
     of them gets the labels of the record, the account and the time it
     was last seen.
     """
-    return [(name, Host.get_host(name, create=create))
-            for name in import_hostnames(hostname, config, attributes)]
+    hosts = []
+    for name in import_hostnames(hostname, config, attributes):
+        try:
+            hosts.append((name, Host.get_host(name, create=create)))
+        except InvalidHostnameError as error:
+            report_invalid_hostname(name, error)
+    return hosts
+
+
+def claim_host(host_obj, config, **kwargs):
+    """
+    `set_account()` for an import: whether the host is to be saved. A
+    name the account refuses (no valid hostname, no FQDN) is reported
+    and skipped, so the import goes on with the next record. Errors of
+    the account itself still stop the run.
+    """
+    try:
+        return host_obj.set_account(account_dict=config, **kwargs)
+    except InvalidHostnameError as error:
+        report_invalid_hostname(host_obj.hostname, error)
+        return False
 
 
 def update_import_host(host_obj, labels, config, **kwargs):
@@ -109,7 +159,7 @@ def update_import_host(host_obj, labels, config, **kwargs):
     if config.get('shadow_mode'):
         return host_obj.update_shadow(labels, config)
     host_obj.update_host(labels)
-    if host_obj.set_account(account_dict=config, **kwargs):
+    if claim_host(host_obj, config, **kwargs):
         host_obj.save()
         return True
     return False

@@ -21,7 +21,9 @@ from tests import real_render_jinja
 
 import application.helpers.import_hostnames as hostnames
 from application.helpers.import_hostnames import (
+    claim_host,
     get_import_hosts,
+    pop_invalid_hostnames,
     import_hostnames,
     parse_hostname_list,
     update_import_host,
@@ -369,3 +371,60 @@ class EveryImporterUsesTheHelperTest(unittest.TestCase):
             source = handle.read()
         self.assertIn('import_hostnames(', source)
         self.assertNotIn('rewrite_hostname(', source)
+
+
+class InvalidHostnameSkipTest(unittest.TestCase):
+    """An invalid name skips its record, the import goes on"""
+
+    def setUp(self):
+        pop_invalid_hostnames()
+        self.error = sys.modules['application.models.host'].InvalidHostnameError
+        self.host_error = sys.modules['application.models.host'].HostError
+
+    @staticmethod
+    def _host(name, raises=None):
+        host = Mock(name=name)
+        host.hostname = name
+        if raises:
+            host.set_account.side_effect = raises
+        else:
+            host.set_account.return_value = True
+        return host
+
+    def test_an_invalid_name_is_skipped_and_reported(self):
+        config = {'name': 'op5', 'check_for_valid_hostname': True}
+        bad = self._host('bad_name!', self.error('bad_name! is not a valid Hostname'))
+        good = self._host('srv01')
+        with patch('builtins.print'):
+            self.assertFalse(update_import_host(bad, {}, config))
+            self.assertTrue(update_import_host(good, {}, config))
+        bad.save.assert_not_called()
+        good.save.assert_called_once()
+        self.assertEqual(pop_invalid_hostnames(),
+                         "1 record(s) skipped for an invalid hostname: bad_name!")
+        self.assertEqual(pop_invalid_hostnames(), '')
+
+    def test_an_error_of_the_account_still_stops_the_run(self):
+        host = self._host('srv01', self.host_error('Account op5 is restricted to inventorize'))
+        with self.assertRaises(self.host_error):
+            claim_host(host, {'name': 'op5'})
+
+    def test_a_name_get_host_refuses_is_left_out(self):
+        def get_host(name, create=True):  # pylint: disable=unused-argument
+            if name == 'srv02':
+                raise self.error('Hostname field does not contain a string')
+            return self._host(name)
+        host_cls = types.SimpleNamespace(get_host=get_host, rewrite_hostname=rewrite_hostname)
+        config = {'rewrite_hostname': "{{ ['srv01', 'srv02', 'srv03'] }}"}
+        with patch.object(hostnames, 'Host', host_cls), patch('builtins.print'):
+            names = [name for name, _host in get_import_hosts('x', config, {})]
+        self.assertEqual(names, ['srv01', 'srv03'])
+        self.assertIn('srv02', pop_invalid_hostnames())
+
+    def test_many_names_keep_a_sample(self):
+        with patch('builtins.print'):
+            for number in range(25):
+                hostnames.report_invalid_hostname(f'bad{number}', 'invalid')
+        line = pop_invalid_hostnames()
+        self.assertTrue(line.startswith('25 record(s)'))
+        self.assertTrue(line.endswith('and 5 more'))

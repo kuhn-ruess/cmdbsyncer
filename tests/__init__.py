@@ -255,6 +255,9 @@ class _Host:  # pylint: disable=too-few-public-methods
 
 
 _models_host.Host = _Host
+# Before the real import_hostnames below, which imports both
+_models_host.HostError = type("HostError", (Exception,), {})
+_models_host.InvalidHostnameError = type("InvalidHostnameError", (_models_host.HostError,), {})
 
 
 class _CmdbField:  # pylint: disable=too-few-public-methods
@@ -608,17 +611,10 @@ _load_real_module(
     os.path.join("helpers", "label_hash.py"),
 )
 
-# Pure standard-library helper behind `cron install`
-_load_real_module(
-    "application.helpers.crontab",
-    os.path.join("helpers", "crontab.py"),
-)
-
-# Pure standard-library helper behind `sys setup_shell`
-_load_real_module(
-    "application.helpers.shell_setup",
-    os.path.join("helpers", "shell_setup.py"),
-)
+# Pure standard-library helpers behind `cron install` and `sys setup_shell`
+for _helper in ('crontab', 'shell_setup'):
+    _load_real_module(f"application.helpers.{_helper}",
+                      os.path.join("helpers", f"{_helper}.py"))
 
 # Loaded for real: it only reads app.config, and the label-history tests
 # exercise its retention clamping through it.
@@ -809,7 +805,6 @@ _cmk_models.BUILTIN_ATTRIBUTE_ACTIONS = {
 
 # application.models.host extras
 _models_host.app = _StubApp()
-_models_host.HostError = type("HostError", (Exception,), {})
 
 
 def _stub_get_cmdb_model_fields(object_type="host"):

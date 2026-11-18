@@ -7,6 +7,7 @@ import requests
 from mongoengine.errors import DoesNotExist
 from application import log
 from application.models.host import Host, HostError
+from application.helpers.import_hostnames import claim_host
 
 
 class ImportCheckmk1():
@@ -64,6 +65,6 @@ class ImportCheckmk1():
             except HostError as error_obj:
                 host.add_log(f"Update Error {error_obj}")
 
-            do_save = host.set_account(account_dict=self.config)
+            do_save = claim_host(host, self.config)
             if do_save:
                 host.save()
