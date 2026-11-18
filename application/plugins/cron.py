@@ -7,8 +7,10 @@ import click
 from mongoengine.errors import DoesNotExist
 
 from application import app, cron_register, log
+from application.helpers import crontab
 from application.helpers.task_status import take_task_failure
 from application.modules.debug import ColorCodes as CC
+from application.models.config import Config
 from application.models.cron import (CronStats, CronGroup, job_account,
                                     job_account_id)
 
@@ -208,6 +210,7 @@ def jobs():  # pylint: disable=too-many-branches,too-many-statements
     """
     Run all configured Jobs
     """
+    Config.objects().update(set__last_cron_pass=datetime.now())
     checked = 0
     started = []
     for job in CronGroup.objects(enabled=True).order_by('sort_field'):
@@ -324,3 +327,47 @@ def jobs():  # pylint: disable=too-many-branches,too-many-statements
     log.log(message, source="cron",
             details=[('groups_checked', checked),
                      ('groups_started', len(started))])
+
+
+@_cli_cron.command('install')
+@click.option('--interval', default=5, show_default=True, type=click.IntRange(1, 59),
+              help="Minutes between two runs of run_jobs")
+@click.option('--print', 'print_only', is_flag=True,
+              help="Only print the crontab line, change nothing")
+@click.option('--allow-root', is_flag=True,
+              help="Install it for root anyway; the jobs run plugins and templates")
+@click.option('--debug', is_flag=True)
+def install(interval, print_only, allow_root, debug):  # pylint: disable=unused-argument
+    """
+    Add the crontab entry that starts run_jobs to the crontab of the
+    current user. Run it as the user the Syncer runs as.
+
+    Example: cmdbsyncer cron install --interval 5
+    """
+    directory = crontab.config_dir()
+    if not directory:
+        print(f"{CC.FAIL}No local_config.py found, run "
+              f"'cmdbsyncer sys self_configure' first{CC.ENDC}")
+        raise SystemExit(1)
+    line = crontab.cron_line(interval, directory, crontab.syncer_binary())
+    if print_only:
+        print(line)
+        return
+
+    if os.geteuid() == 0 and not allow_root:
+        print(f"{CC.FAIL}Refusing to install the cron job for root. Run it as the "
+              f"Syncer user (e.g. sudo -iu cmdbsyncer), or pass --allow-root{CC.ENDC}")
+        raise SystemExit(1)
+
+    try:
+        current = crontab.read_crontab()
+        if existing := crontab.existing_entry(current):
+            print(f"{CC.WARNING}The crontab already runs run_jobs, nothing changed:{CC.ENDC}")
+            print(f"  {existing}")
+            return
+        crontab.write_crontab(crontab.with_entry(current, line))
+    except crontab.CrontabError as error:
+        print(f"{CC.FAIL}{error}{CC.ENDC}")
+        raise SystemExit(1) from error
+    print(f"{CC.OKGREEN}Cron job installed, every {interval} minutes:{CC.ENDC}")
+    print(f"  {line}")

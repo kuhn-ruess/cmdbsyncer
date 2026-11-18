@@ -780,6 +780,7 @@ class IndexView(AdminIndexView):
         # Cron status + one-click trigger.
         can_trigger_cron = _may('cron')
         cron_status = self._collect_cron_status() if can_trigger_cron else []
+        cron_heartbeat = self._collect_cron_heartbeat(cron_status)
 
         # Warn users who can edit Checkmk rules about deprecated actions still
         # in use — those actions will be removed with 4.4 and rules carrying
@@ -803,6 +804,7 @@ class IndexView(AdminIndexView):
             'error_count_24h': error_count_24h,
             'can_see_log': can_see_log,
             'cron_status': cron_status,
+            'cron_heartbeat': cron_heartbeat,
             'can_trigger_cron': can_trigger_cron,
             'deprecated_rules': deprecated_rules,
             'deprecation_warning': deprecation_warning,
@@ -870,6 +872,27 @@ class IndexView(AdminIndexView):
             return rows
         except Exception:  # pylint: disable=broad-exception-caught
             return []
+
+    @staticmethod
+    def _collect_cron_heartbeat(cron_status):
+        """
+        ``{'age': ...}`` of the last ``cron run_jobs`` pass when it is
+        overdue, None while cron runs or no group is enabled to run.
+        """
+        # pylint: disable=import-outside-toplevel
+        from application.helpers.crontab import missing_heartbeat
+        from application.models.config import Config
+        if not any(row['enabled'] for row in cron_status):
+            return None
+        try:
+            config = Config.objects.only('last_cron_pass').first()
+        except Exception:  # pylint: disable=broad-exception-caught
+            return None
+        last_pass = config.last_cron_pass if config else None
+        now = datetime.now()
+        if not missing_heartbeat(last_pass, now):
+            return None
+        return {'age': _humanize_age(last_pass, now)}
 
     @staticmethod
     def _collect_error_logs():

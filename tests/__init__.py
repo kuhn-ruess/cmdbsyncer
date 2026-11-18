@@ -608,6 +608,12 @@ _load_real_module(
     os.path.join("helpers", "label_hash.py"),
 )
 
+# Pure standard-library helper behind `cron install`
+_load_real_module(
+    "application.helpers.crontab",
+    os.path.join("helpers", "crontab.py"),
+)
+
 # Loaded for real: it only reads app.config, and the label-history tests
 # exercise its retention clamping through it.
 _load_real_module(

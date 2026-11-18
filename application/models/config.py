@@ -20,6 +20,10 @@ class Config(db.Document):  # pylint: disable=too-few-public-methods
     # while setup steps are still open.
     first_steps_dismissed = db.BooleanField(default=False)
 
+    # Start of the latest `cron run_jobs` pass. The start page warns when
+    # it is missing or old: then the system cron does not call the Syncer.
+    last_cron_pass = db.DateTimeField()
+
     # Tolerate fields written by a newer version (e.g. a build on the same
     # database) so a downgrade doesn't fail loading the Config document.
     meta = {'strict': False}

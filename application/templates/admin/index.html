@@ -173,6 +173,14 @@
   color: #e74c3c;
 }
 .cron-trigger-error:empty { display: none; }
+/* No run_jobs pass for a while: accent border only, theme colours. */
+.cron-heartbeat-warning {
+  border-left: 4px solid #f9a825;
+  padding: 0.4rem 0.75rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--surface-text, #2c3e50);
+}
 
 /* Setup progress — only rendered while the First Steps checklist still
    has open items. Colours come from the --surface-* tokens so all four
@@ -881,6 +889,14 @@ function toggleAllFilters() {
     {% if can_trigger_cron %}
     <div class="home-card" id="cron-status">
       <h2>Cron Jobs</h2>
+      {% if cron_heartbeat %}
+      <p class="cron-heartbeat-warning">
+        <strong>The cron job does not run:</strong>
+        {% if cron_heartbeat.age %}the last pass was {{ cron_heartbeat.age }}{% else %}no pass so far{% endif %},
+        so no group starts on its schedule. Set it up as the Syncer user with
+        <code>cmdbsyncer cron install</code>.
+      </p>
+      {% endif %}
       {% if cron_status %}
       <table class="cron-status-table">
         <tbody>
