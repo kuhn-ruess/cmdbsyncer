@@ -376,6 +376,10 @@ PRESETS = [
             {'key': 'LDAP_SERVER', 'type': 'str',
              'default': 'ldaps://ldap.example.com',
              'hint': 'LDAP URL. Prefer ldaps:// for TLS.'},
+            {'key': 'LDAP_TLS_CA_FILE', 'type': 'str', 'default': '',
+             'hint': 'Optional: CA file the certificate of the server is '
+                     'checked against, for an internal CA. Empty = the CAs '
+                     'of the system.'},
             {'key': 'LDAP_USER_DN_TEMPLATE', 'type': 'str',
              'default': 'uid={username},ou=people,dc=example,dc=com',
              'hint': 'Only for logins without a service account: the DN '

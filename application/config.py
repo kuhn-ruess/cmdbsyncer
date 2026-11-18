@@ -285,6 +285,9 @@ class BaseConfig():
     # the login view will attempt an LDAP bind before falling back to local passwords.
     LDAP_LOGIN = False
     LDAP_SERVER = ''
+    # CA file the certificate of the server is checked against. Empty =
+    # the CAs of the system. The certificate is always checked.
+    LDAP_TLS_CA_FILE = ''
     # Direct-bind mode: format string with {username} placeholder, e.g.
     #   'uid={username},ou=people,dc=example,dc=com'
     # Leave empty to use search-based mode (requires LDAP_BIND_USER).
