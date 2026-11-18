@@ -1874,8 +1874,8 @@ class CheckmkSettingsView(DefaultModelView):
                      rules.Field('webserver_certificate_intermediate')]),
             section('5', 'aux', 'Weekly Schedule',
                     'Optional: what to do once a week on this day and hour. '
-                    'Needs the cron job Checkmk Server: Scheduled Updates in '
-                    'a cron group that runs every 15 minutes.',
+                    'The cron group Checkmk Server: Scheduled Updates runs it; '
+                    'it is set up and switched on with the first schedule.',
                     [rules.Field('schedule_weekday'),
                      rules.Field('schedule_hour'),
                      rules.Field('schedule_update_version'),

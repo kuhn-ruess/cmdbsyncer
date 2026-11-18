@@ -19,6 +19,7 @@ from application._version import __version__ as _SYNCER_VERSION
 from application.models.host import Host
 from application.modules.debug import ColorCodes as CC
 from application.plugins.checkmk.poolfolder import remove_seat
+from application.plugins.checkmk.server_schedule import sync_cron_group
 from application.models.account import Account
 from application.models.user import User
 from application.plugins.checkmk.models import CheckmkFolderPool
@@ -961,6 +962,8 @@ def self_configure():
     sync_folderpools()
     print("Sync Checkmk Site Pools")
     sync_sitepools()
+    print("Sync the cron group of the Checkmk server weekly runs")
+    sync_cron_group()
 
 #.
 #   .-- Command: Shell setup for the current user

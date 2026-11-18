@@ -4,7 +4,8 @@ weekday and hour: set the newest patch release of its Checkmk version
 and start Manage OMD Server for the servers of its sites.
 
 The cron job runs whatever is due when it is called, so its cron group
-runs every 15 minutes. A run that is missed on its day waits a week.
+runs every 15 minutes. That group is managed here: it exists and is on as
+long as a settings has a schedule. A run missed on its day waits a week.
 
 Settings can depend on others, production on test for example: they
 run only after a success of the other one within the last week, and
@@ -26,6 +27,8 @@ PLAYBOOK = 'cmk_server_mngmt.yml'
 LOG_SOURCE = 'Checkmk Server'
 # How old the success of a dependency may be
 DEPENDENCY_MAX_AGE = timedelta(days=7)
+# The cron job, and the protected cron group that runs it
+CRON_TASK = 'Checkmk Server: Scheduled Updates'
 
 
 class SkipRun(Exception):
@@ -38,11 +41,53 @@ def site_servers(setting):
                    CheckmkSite.objects(settings_master=setting, enabled=True)})
 
 
+def has_schedule(setting):
+    """Whether ``setting`` has a weekly run with something to do"""
+    return bool(setting.schedule_weekday and
+                (setting.schedule_update_version or setting.schedule_run_playbook))
+
+
+def sync_cron_group():
+    """
+    Keep the protected cron group of the weekly runs: on, every 15 minutes,
+    while an enabled settings has a schedule, off without one. Created on
+    the first schedule, kept afterwards.
+    """
+    # pylint: disable-next=import-outside-toplevel
+    from application.models.cron import CronGroup, GroupEntry
+    scheduled = any(has_schedule(setting)
+                    for setting in CheckmkSettings.objects(enabled__ne=False))
+    group = CronGroup.objects(name=CRON_TASK).first()
+    if group is None:
+        if not scheduled:
+            return
+        group = CronGroup(name=CRON_TASK, interval='10min', timerange_from='0',
+                          timerange_to='24',
+                          jobs=[GroupEntry(name='Weekly runs', command=CRON_TASK)])
+    group.protected = True
+    group.enabled = scheduled
+    group.save()
+
+
+def _sync_after_change(sender, document, **kwargs):  # pylint: disable=unused-argument
+    """Signal handler: a saved or deleted settings may change the schedule"""
+    try:
+        sync_cron_group()
+    except Exception as exp:  # pylint: disable=broad-exception-caught
+        log.log("Cron group of the weekly runs not updated", source=LOG_SOURCE,
+                details=[('error', str(exp))])
+
+
+def connect_signals():
+    """Sync the cron group whenever a settings is saved or deleted"""
+    from mongoengine import signals  # pylint: disable=import-outside-toplevel
+    signals.post_save.connect(_sync_after_change, sender=CheckmkSettings)
+    signals.post_delete.connect(_sync_after_change, sender=CheckmkSettings)
+
+
 def is_due(setting, now):
     """Whether the weekly run of ``setting`` is due at ``now``"""
-    if not setting.schedule_weekday:
-        return False
-    if not (setting.schedule_update_version or setting.schedule_run_playbook):
+    if not has_schedule(setting):
         return False
     if schedule_weekdays[now.weekday()][0] != setting.schedule_weekday:
         return False
