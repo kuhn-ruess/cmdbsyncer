@@ -340,8 +340,8 @@ PRESETS = [
         'doc': 'ent_ldap_login',
         'description': (
             "Enterprise LDAP/AD login. When enabled, the login view "
-            "tries an LDAP bind before falling back to the local "
-            "password. Start with **Fill for Active Directory** or "
+            "checks the local password first and asks the directory "
+            "only when it does not match. Start with **Fill for Active Directory** or "
             "**Fill for OpenLDAP**, enter server, service account and "
             "search base, then **Test login** with a directory user "
             "before you apply. ``LDAP_ROLE_MAPPING`` is a nested "

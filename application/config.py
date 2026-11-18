@@ -282,7 +282,8 @@ class BaseConfig():
 
     # LDAP login (enterprise feature)
     # If LDAP_LOGIN is enabled and the enterprise 'ldap_login' hook is registered,
-    # the login view will attempt an LDAP bind before falling back to local passwords.
+    # the login view checks the local password first and asks LDAP only
+    # when there is no local match.
     LDAP_LOGIN = False
     LDAP_SERVER = ''
     # CA file the certificate of the server is checked against. Empty =

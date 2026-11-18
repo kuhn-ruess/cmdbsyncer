@@ -165,8 +165,14 @@ def login():  # pylint: disable=too-many-return-statements,too-many-branches,too
         else:
             existing_user = False
 
+        # The local password first: a local user logs in without the
+        # directory ever seeing that password, and without a failed bind.
+        # The directory is only asked when there is no local match.
+        local_ok = bool(existing_user) and existing_user.check_password(password)
         ldap_authenticated = False
-        if app.config['LDAP_LOGIN'] and not has_feature('ldap_login'):
+        if local_ok:
+            pass
+        elif app.config['LDAP_LOGIN'] and not has_feature('ldap_login'):
             # Without it only the local password is checked, and a
             # directory user reads "Wrong Password" with no reason anywhere
             log.log("LDAP login is on, but the enterprise LDAP login is not "
@@ -194,7 +200,6 @@ def login():  # pylint: disable=too-many-return-statements,too-many-branches,too
                 return render_template('login.html', **context)
 
         # Always wrong Password, even when user not exists
-        local_ok = existing_user and existing_user.check_password(password)
         if not ldap_authenticated and not local_ok:
             audit('user.login.failure', outcome='failure',
                   actor_name=email,
