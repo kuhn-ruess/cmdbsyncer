@@ -41,7 +41,8 @@ class Op5(Plugin):
         Columns to request, the account field `columns` overrides the default.
         The hostname column `name` is always part of the request.
         """
-        configured = [x.strip() for x in self.config.get('columns', '').split(',')
+        # An empty account field arrives as False, not as ''
+        configured = [x.strip() for x in (self.config.get('columns') or '').split(',')
                       if x.strip()]
         columns = configured or list(DEFAULT_COLUMNS)
         if 'name' not in columns:

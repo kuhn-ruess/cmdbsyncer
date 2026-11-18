@@ -25,6 +25,10 @@ class TestOp5(unittest.TestCase):
     def test_default_columns(self):
         self.assertEqual(make_op5().columns(), DEFAULT_COLUMNS)
 
+    def test_empty_account_field_means_default_columns(self):
+        # get_account_by_name hands an empty custom field over as False
+        self.assertEqual(make_op5(False).columns(), DEFAULT_COLUMNS)
+
     def test_configured_columns_always_contain_name(self):
         self.assertEqual(make_op5('address, groups').columns(),
                          ['name', 'address', 'groups'])
