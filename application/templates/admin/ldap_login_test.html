@@ -1,0 +1,99 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container mt-4">
+    <h3>LDAP Login Test</h3>
+    <p>
+        Tries the login of a directory user with the settings the login page
+        uses right now, and shows every step: connection, bind, search,
+        groups, the local user and its rights. Nothing is saved; each test is
+        logged under Settings, Log with source <code>AUTH</code>.
+        A changed setting counts here after the restart that also makes the
+        login page use it. To try values before saving, use the LDAP login
+        card in Configuration, Edit local_config.py.
+        <a href="{{ docs_url }}" target="_blank" rel="noopener">Documentation</a>
+    </p>
+
+    <div class="card app-card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Does the login page try LDAP?</h5>
+            <ul class="list-unstyled mb-0">
+            {% for row in preconditions %}
+                <li class="mb-1">
+                    <span class="{{ 'text-success' if row.ok else 'text-danger' }}">
+                        {{ '&#10003;'|safe if row.ok else '&#10007;'|safe }} {{ row.text }}
+                    </span>
+                    {% if row.hint %}<div class="alert alert-warning ldap-test-hint">{{ row.hint }}</div>{% endif %}
+                </li>
+            {% endfor %}
+            </ul>
+            {% if preconditions|rejectattr('ok')|list %}
+            <p class="text-muted mt-2 mb-0">
+                While one of these fails, the login page checks the local
+                password only and answers "Wrong Password" for every
+                directory user.
+            </p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card app-card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Settings in use</h5>
+            <table class="table table-sm mb-0">
+                <tbody>
+                {% for name, value in settings %}
+                    <tr><th style="width: 30%">{{ name }}</th><td><code>{{ value }}</code></td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <form method="POST" action="{{ url_for('.index') }}" class="card app-card mb-4" autocomplete="off">
+        <div class="card-body">
+            <h5 class="card-title">Test a login</h5>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-row">
+                <div class="col-md-5 mb-2">
+                    <input type="text" name="login" class="form-control" value="{{ login }}"
+                           placeholder="Login, as typed on the login page" required>
+                </div>
+                <div class="col-md-5 mb-2">
+                    <input type="password" name="password" class="form-control"
+                           placeholder="Password" autocomplete="new-password" required>
+                </div>
+                <div class="col-md-2 mb-2">
+                    <button type="submit" class="btn btn-primary btn-block">Test login</button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    {% if result %}
+    <div class="card app-card mb-4" id="ldap-test-result">
+        <div class="card-body">
+            <h5 class="card-title {{ 'text-success' if result.ok else 'text-danger' }}">
+                {{ 'The login works' if result.ok else 'The login fails' }}
+            </h5>
+            <ol class="mb-0">
+            {% for step in result.steps %}
+                <li class="mb-2">
+                    <span class="{{ 'text-danger' if step.ok == false else ('text-success' if step.ok else 'text-muted') }}">
+                        {% if step.ok == false %}&#10007;{% elif step.ok %}&#10003;{% endif %} {{ step.text }}
+                    </span>
+                    {% for key, value in (step.details or {}).items() %}
+                        <small class="d-block">{{ key }}: {{ value }}</small>
+                    {% endfor %}
+                    {% if step.hint %}<div class="alert alert-warning ldap-test-hint">{{ step.hint }}</div>{% endif %}
+                </li>
+            {% endfor %}
+            </ol>
+        </div>
+    </div>
+    {% endif %}
+</div>
+<style>
+.ldap-test-hint { margin: 4px 0 0; padding: 4px 8px; font-size: 13px; }
+</style>
+{% endblock %}

@@ -166,7 +166,14 @@ def login():  # pylint: disable=too-many-return-statements,too-many-branches,too
             existing_user = False
 
         ldap_authenticated = False
-        if app.config['LDAP_LOGIN']:
+        if app.config['LDAP_LOGIN'] and not has_feature('ldap_login'):
+            # Without it only the local password is checked, and a
+            # directory user reads "Wrong Password" with no reason anywhere
+            log.log("LDAP login is on, but the enterprise LDAP login is not "
+                    "active: only local passwords are checked", source="AUTH",
+                    details=[('email', email),
+                             ('check', 'Settings, LDAP Login Test')])
+        elif app.config['LDAP_LOGIN']:
             try:
                 ldap_user = run_hook('ldap_login', email, password)
                 if ldap_user:

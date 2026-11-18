@@ -8,9 +8,9 @@ from flask import flash, redirect, request, url_for
 from flask_admin import expose
 from flask_login import current_user
 
-from application import app, log
+from application import app
 from application.config import BaseConfig
-from application.enterprise import has_feature, run_hook
+from application.enterprise import has_feature
 from application.docu_links import docu_links
 from application.helpers.local_config_file import (
     LocalConfigError, delete_key, is_writable, load, set_key,
@@ -19,6 +19,7 @@ from application.helpers.local_config_presets import PRESETS, get_preset
 from application.helpers.sates import remove_changes
 from application.plugins.maintenance import clear_host_caches
 from application.views.default import DefaultModelView
+from application.views.ldap_login_test import run_login_test
 
 
 # Keys never shown in the editor. The real values stay in
@@ -527,23 +528,8 @@ class ConfigModelView(DefaultModelView):
         Try the LDAP login of a directory user with the values of the LDAP
         card, before they are saved. Nothing is written but a log entry.
         """
-        if not has_feature('ldap_check_login'):
-            return {'ok': False, 'steps': [{
-                'ok': False, 'text': 'The LDAP login is not available',
-                'hint': 'It needs the enterprise feature ldap_login.'}]}
-        login = (request.form.get('check_login') or '').strip().lower()
-        result = run_hook('ldap_check_login', _ldap_check_config(),
-                          login, request.form.get('check_password') or '')
-        last = result['steps'][-1] if result['steps'] else {}
-        details = [('tested_by', current_user.email), ('login', login),
-                   ('result', last.get('text', ''))]
-        if not result['ok']:
-            details.append(('error', last.get('details', {}).get('error')
-                            or last.get('hint') or last.get('text', '')))
-        log.log(f"LDAP login test for {login}: "
-                f"{'success' if result['ok'] else 'failed'}",
-                source='AUTH', details=details)
-        return result
+        return run_login_test(_ldap_check_config(), request.form.get('check_login'),
+                              request.form.get('check_password'))
 
     # ---------- helpers ------------------------------------------------
 

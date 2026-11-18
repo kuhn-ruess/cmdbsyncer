@@ -929,6 +929,11 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     admin.add_view(LicenseView(name="License", endpoint="license", category="Settings",
                                menu_icon_type='fa', menu_icon_value='fa-id-card'))
 
+    from application.views.ldap_login_test import LdapLoginTestView
+    admin.add_view(LdapLoginTestView(name="LDAP Login Test", endpoint="ldap_login_test",
+                                     category="Settings", menu_icon_type='fa',
+                                     menu_icon_value='fa-stethoscope'))
+
     from application.models.notification_channel import NotificationChannel
     from application.views.notification_channel import NotificationChannelView
     admin.add_view(NotificationChannelView(
