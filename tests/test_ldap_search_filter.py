@@ -35,7 +35,7 @@ class DefaultAccountFilterTest(unittest.TestCase):
         self.assertFalse(default_account_filter('group'))
 
 
-@unittest.skipUnless(LDAP_AVAILABLE, "python-ldap escapes the search term")
+@unittest.skipUnless(LDAP_AVAILABLE, "ldap3 escapes the search term")
 class BuildSearchFilterTest(unittest.TestCase):
     """application.plugins.ldap.ldap"""
 

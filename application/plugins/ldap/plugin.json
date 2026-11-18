@@ -13,6 +13,7 @@
         "hostname_field": "host",
         "encoding": "ascii",
         "allow_unencrypted": "",
+        "tls_ca_file": "",
         "rewrite_hostname": "",
         "inventorize_key": "",
         "inventorize_match_by_domain": "",
@@ -27,6 +28,7 @@
         "hostname_field": "Attribute whose value becomes the hostname in the Syncer",
         "encoding": "Character encoding the server answers in, e.g. utf-8",
         "allow_unencrypted": "yes continues on a plain ldap:// connection when StartTLS fails",
+        "tls_ca_file": "CA file the server certificate is checked against, empty for the CAs of the system",
         "rewrite_hostname": "Jinja template rewriting the hostname, e.g. {{host}}.example.com",
         "inventorize_key": "Prefix the inventorized attributes are stored under",
         "inventorize_match_by_domain": "yes matches the object to a host including its domain",
@@ -34,5 +36,5 @@
         "inventorize_collect_by_key": "Attribute whose objects are collected into one list",
         "inventorize_rewrite_collect_by_key": "Jinja template rewriting each collected entry"
     },
-    "depends_on_py_modules": [ "ldap"]
+    "depends_on_py_modules": [ "ldap3"]
 }

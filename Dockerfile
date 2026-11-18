@@ -20,7 +20,6 @@ RUN apk add --no-cache python3 \
     krb5-pkinit \
     krb5-dev \
     krb5 \
-    openldap-dev \
     unixodbc-dev \
     dcron \
     openssh-client \

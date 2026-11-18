@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Import LDAP Data"""
-# pylint: disable=no-member
 import re
+import ssl
 
 from application import log
 from application.helpers.get_account import get_account_by_name
@@ -9,12 +9,18 @@ from application.helpers.import_hostnames import get_import_hosts, import_hostna
 from application.modules.debug import ColorCodes, attribute_table
 
 try:
-    import ldap
-    from ldap.controls.libldap import SimplePagedResultsControl
-    from ldap.filter import escape_filter_chars
+    from ldap3 import ALL_ATTRIBUTES, SUBTREE, Connection, Server, Tls
+    from ldap3.core.exceptions import LDAPCommunicationError, LDAPException
+    from ldap3.utils.conv import escape_filter_chars
     LDAP_AVAILABLE = True
 except ImportError:
     LDAP_AVAILABLE = False
+
+# Control of the paged search (RFC 2696) in the result of a search
+PAGED_RESULTS_OID = '1.2.840.113556.1.4.319'
+
+# Seconds to wait for the server to accept the connection
+CONNECT_TIMEOUT = 10
 
 
 class LdapSearchError(Exception):
@@ -31,10 +37,10 @@ ATTRIBUTE_NAME = re.compile(r'^[A-Za-z][A-Za-z0-9-]*$')
 
 def _require_ldap():
     """
-    Stop with a readable message when python-ldap is missing
+    Stop with a readable message when ldap3 is missing
     """
     if not LDAP_AVAILABLE:
-        raise LdapSearchError("The python-ldap module is not installed on this server")
+        raise LdapSearchError("The ldap3 module is not installed on this server")
 
 
 def decode_value(value, config):
@@ -102,42 +108,58 @@ def parse_object(dn, entry, config):
     return '', labels
 
 
+def _open(config):
+    """
+    Open an unbound connection. The certificate of the server is always
+    verified, against the system CAs or the CA file of the account.
+    """
+    tls = Tls(validate=ssl.CERT_REQUIRED,
+              ca_certs_file=(config.get('tls_ca_file') or '').strip() or None)
+    server = Server(config['address'], tls=tls, connect_timeout=CONNECT_TIMEOUT)
+    connect = Connection(server, user=config['username'] or None,
+                         password=config['password'] or None,
+                         auto_referrals=False, return_empty_attributes=False,
+                         raise_exceptions=True)
+    connect.open()
+    return connect
+
+
 def _connect(config):
     """
-    Initialize an LDAP connection, upgrade plain ldap:// via StartTLS
+    Open an LDAP connection, upgrade plain ldap:// via StartTLS
     unless explicitly allowed to stay unencrypted, and bind.
     Returns the connection or None on failure.
     """
-    connect = ldap.initialize(config['address'])
-    connect.set_option(ldap.OPT_REFERRALS, 0)
-
-    if config['address'].lower().startswith('ldap://'):
-        try:
-            connect.start_tls_s()
-        except ldap.LDAPError as tls_error:
-            if str(config.get('allow_unencrypted', '')).strip().lower() \
-                    not in ('yes', 'true', '1'):
-                print("Error: LDAP StartTLS failed and unencrypted bind is "
-                      "not allowed for this account")
-                log.log(
-                    "LDAP import aborted: StartTLS failed and unencrypted "
-                    "bind is not allowed for this account",
-                    source="LDAP",
-                    details=[
-                        ("account", config.get('name', '')),
-                        ("address", config.get('address', '')),
-                        ("error", str(tls_error)),
-                    ],
-                )
-                if config['debug']:
-                    raise
-                return None
-            print(f"Warning: Continuing without TLS ({tls_error})")
-
     try:
-        connect.simple_bind_s(config['username'], config['password'])
-    except ldap.SERVER_DOWN:
-        print("Error: Ldap Server not reachable")
+        connect = _open(config)
+        if config['address'].lower().startswith('ldap://'):
+            try:
+                connect.start_tls()
+            except LDAPException as tls_error:
+                if str(config.get('allow_unencrypted', '')).strip().lower() \
+                        not in ('yes', 'true', '1'):
+                    print("Error: LDAP StartTLS failed and unencrypted bind is "
+                          "not allowed for this account")
+                    log.log(
+                        "LDAP import aborted: StartTLS failed and unencrypted "
+                        "bind is not allowed for this account",
+                        source="LDAP",
+                        details=[
+                            ("account", config.get('name', '')),
+                            ("address", config.get('address', '')),
+                            ("error", str(tls_error)),
+                        ],
+                    )
+                    if config['debug']:
+                        raise
+                    return None
+                print(f"Warning: Continuing without TLS ({tls_error})")
+                # A failed handshake can leave the socket unusable
+                connect.unbind()
+                connect = _open(config)
+        connect.bind()
+    except LDAPCommunicationError as error:
+        print(f"Error: Ldap Server not reachable ({error})")
         if config['debug']:
             raise
         return None
@@ -167,35 +189,36 @@ def _get_attributes(config):
 
 def _search(connect, config, limit=0):
     """
-    Paged LDAP Search, yields the raw (dn, entry) tuples
+    Paged LDAP Search, yields the raw (dn, entry) tuples: entry maps each
+    attribute to its list of values as bytes. A referral comes as
+    (None, [urls]), not as an object.
     """
-    query = (config['base_dn'], ldap.SCOPE_SUBTREE,
-             config['search_filter'], _get_attributes(config))
+    attributes = _get_attributes(config)
 
     if config['debug']:
-        print(f"INFO: Use Filter: {query[2]}")
-        print(f"INFO: Search the following Attributes: {query[3]}")
+        print(f"INFO: Use Filter: {config['search_filter']}")
+        print(f"INFO: Search the following Attributes: {attributes}")
 
-    page_control = SimplePagedResultsControl(True, size=1000, cookie='')
-
-    response = connect.search_ext(*query, serverctrls=[page_control])
+    cookie = None
     found = 0
     while True:
-        _rtype, rdata, _rmsgid, srvctrls = connect.result3(response)
-        for result in rdata:
-            yield result
+        connect.search(config['base_dn'], config['search_filter'], SUBTREE,
+                       attributes=attributes or ALL_ATTRIBUTES,
+                       paged_size=1000, paged_cookie=cookie)
+        for item in connect.response:
+            if item.get('type') == 'searchResEntry':
+                yield item['dn'], dict(item['raw_attributes'])
+            else:
+                yield None, item.get('uri', [])
             found += 1
             if limit and found >= limit:
                 return
-        controls = [ctl for ctl in srvctrls \
-                       if ctl.controlType == SimplePagedResultsControl.controlType]
-        if not controls:
+        control = (connect.result.get('controls') or {}).get(PAGED_RESULTS_OID)
+        if not control:
             raise ValueError("The server ignores RFC 2696 control")
-        if not controls[0].cookie:
+        cookie = control['value']['cookie']
+        if not cookie:
             break
-
-        page_control.cookie = controls[0].cookie
-        response = connect.search_ext(*query, serverctrls=[page_control])
 
 
 # Search modes that start without the search filter of the account: their
@@ -297,7 +320,7 @@ def search_objects(config, search_filter, limit=25):
         return results
     except LookupError as error:
         raise LdapSearchError(f"Unknown encoding '{config['encoding']}'") from error
-    except (ldap.LDAPError, ValueError) as error:
+    except (LDAPException, ValueError) as error:
         raise LdapSearchError(str(error)) from error
 
 
@@ -394,7 +417,7 @@ def get_group_attributes(config, group_names, name_attribute='cn', attributes=No
         found = _find_groups(connect, config, names, name_attribute)
     except LookupError as error:
         raise LdapSearchError(f"Unknown encoding '{config['encoding']}'") from error
-    except (ldap.LDAPError, ValueError) as error:
+    except (LDAPException, ValueError) as error:
         raise LdapSearchError(str(error)) from error
 
     return {name: found[name.lower()] for name in names if name.lower() in found}
@@ -525,7 +548,7 @@ def ldap_debug_query(account, overrides=None, limit=10, debug=False, list_attrib
                 continue
             if _print_object(total, dn, entry, config):
                 usable += 1
-    except ldap.LDAPError as error:
+    except LDAPException as error:
         print(f"{ColorCodes.FAIL}LDAP Error: {error}{ColorCodes.ENDC}")
         if debug:
             raise
