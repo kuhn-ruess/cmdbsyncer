@@ -1,0 +1,56 @@
+---
+# Called before the update of the site when the CMK Server Settings name a
+# URL, a VM snapshot for example. The update of this server goes on only
+# after a successful answer: HTTP 2xx and, when cmk_pre_update_success_field
+# is set, that field of the JSON answer (a dotted path like
+# item2.workflowStatus) equal to cmk_pre_update_success_value. Any other
+# answer stops the play for this server, before the downtime and the update.
+
+- name: "Call {{ cmk_pre_update_url }} before the site update"
+  ansible.builtin.uri:
+    url: "{{ cmk_pre_update_url }}"
+    method: POST
+    headers: >-
+      {{ {'Accept': 'application/json', 'Content-Type': 'application/json'}
+         | combine({'Authorization': 'Bearer ' ~ cmk_pre_update_token}
+                   if (cmk_pre_update_token | default('') | trim) else {}) }}
+    body_format: json
+    body: "{{ cmk_pre_update_body | default('{}') }}"
+    status_code: [200, 201, 202, 204]
+    timeout: "{{ cmk_pre_update_timeout | default(600) | int }}"
+    return_content: true
+  # The token is in the request
+  no_log: true
+  ignore_errors: true
+  delegate_to: localhost
+  register: pre_update_result
+
+- name: "Read {{ cmk_pre_update_success_field }} of the answer"
+  ansible.builtin.set_fact:
+    pre_update_found: >-
+      {%- set ns = namespace(value=pre_update_result.json | default(none)) -%}
+      {%- for key in cmk_pre_update_success_field.split('.') -%}
+      {%- set ns.value = ns.value[key] if (ns.value is mapping and key in ns.value) else none -%}
+      {%- endfor -%}
+      {{ ns.value }}
+  when:
+    - pre_update_result is succeeded
+    - (cmk_pre_update_success_field | default('') | trim) != ''
+
+# no_log hides the answer above; status and body carry no token, so the
+# run says why it stops
+- name: "Call before the update not successful, the update of this server stops"
+  ansible.builtin.fail:
+    msg: >-
+      {% if pre_update_result is failed %}
+      {{ cmk_pre_update_url }} answered HTTP {{ pre_update_result.status | default('no answer') }}:
+      {{ (pre_update_result.content | default(pre_update_result.msg | default(''))) | truncate(500) }}
+      {% else %}
+      {{ cmk_pre_update_url }}: {{ cmk_pre_update_success_field }} is
+      '{{ pre_update_found }}', expected '{{ cmk_pre_update_success_value }}'.
+      Answer: {{ pre_update_result.content | default('') | truncate(500) }}
+      {% endif %}
+  when: >-
+    pre_update_result is failed or
+    ((cmk_pre_update_success_field | default('') | trim) != '' and
+     (pre_update_found | string) != (cmk_pre_update_success_value | default('') | string))

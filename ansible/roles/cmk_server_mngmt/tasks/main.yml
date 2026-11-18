@@ -98,6 +98,15 @@
   when: not site_dir.stat.exists
   register: site_just_installed
 
+# A call before the update, a VM snapshot for example; a failed one stops
+# the update of this server here, before the downtime
+- name: "Call before the site update"
+  ansible.builtin.include_tasks: pre_update_call.yml
+  when:
+    - (cmk_pre_update_url | default('') | trim) != ''
+    - server_site_version.stdout != cmk_version+"."+cmk_edition
+    - not site_just_installed.changed
+
 # Calculated by Ansible itself: the date command of the container image
 # (BusyBox) knows neither --date '+2 hours' nor the %:z format.
 - name: "Calculation downtime start and end +{{ cmk_downtime_range }} hours"

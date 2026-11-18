@@ -82,9 +82,39 @@ class SyncSites(Plugin):
             'webserver_intermediate_certificate':
                 site.settings_master.webserver_certificate_intermediate,
         })
-        for custom_var in site.custom_ansible_variables:
-            inventory[custom_var.variable_name] = custom_var.variable_value
+        custom_vars = {var.variable_name: var.variable_value
+                       for var in site.custom_ansible_variables}
+        inventory.update(self.pre_update_call(site, custom_vars))
+        inventory.update(custom_vars)
         return inventory
+
+    @staticmethod
+    def pre_update_call(site, custom_vars):
+        """
+        The call the playbook makes before it updates the site, empty
+        without a URL. URL and token may use {{ACCOUNT:...}}; the body is
+        rendered for this server and site, with its custom variables.
+        """
+        settings = site.settings_master
+        url = render_jinja(settings.pre_update_url or "")
+        if not url:
+            return {}
+        body = render_jinja(settings.pre_update_body or "{}", **{
+            **custom_vars,
+            'SERVER': site.server_address,
+            'SITE': site.name,
+            'CMK_VERSION': settings.cmk_version,
+            'CMK_EDITION': settings.cmk_edition,
+            'SETTINGS': settings.name,
+        })
+        return {
+            'cmk_pre_update_url': url,
+            'cmk_pre_update_token': render_jinja(settings.pre_update_token or ""),
+            'cmk_pre_update_body': body,
+            'cmk_pre_update_success_field': (settings.pre_update_success_field or "").strip(),
+            'cmk_pre_update_success_value': (settings.pre_update_success_value or "").strip(),
+            'cmk_pre_update_timeout': settings.pre_update_timeout or 600,
+        }
 
     def get_full_inventory(self):
         """

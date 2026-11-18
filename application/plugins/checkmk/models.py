@@ -791,6 +791,16 @@ class CheckmkSettings(db.Document):
     cmk_secret = db.StringField()
     cmk_server_address = db.StringField()
 
+    # Called before the update of a site, a VM snapshot for example: the
+    # update of that server goes on only after a successful answer. See
+    # pre_update_call.yml of the role cmk_server_mngmt.
+    pre_update_url = db.StringField()
+    pre_update_token = db.StringField()
+    pre_update_body = db.StringField()
+    pre_update_success_field = db.StringField()
+    pre_update_success_value = db.StringField()
+    pre_update_timeout = db.IntField(default=600)
+
     webserver_certificate = db.StringField()
     webserver_certificate_private_key = db.StringField()
     webserver_certificate_intermediate = db.StringField()

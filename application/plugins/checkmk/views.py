@@ -1786,6 +1786,24 @@ class CheckmkSettingsView(DefaultModelView):
         'server_user': {
             'placeholder': "User to connect to server where the site is running",
         },
+        'pre_update_url': {
+            'placeholder': "https://automation.example.com/api/webhook/<guid>",
+        },
+        'pre_update_token': {
+            'placeholder': "Sent as Authorization: Bearer, e.g. {{ACCOUNT:snapshot:password}}",
+        },
+        'pre_update_body': {
+            'rows': 7,
+            'placeholder': ('{"Parameters": {"VM Name": "{{ SERVER }}", '
+                            '"Snapshot Name": "cmk-{{ CMK_VERSION }}", '
+                            '"vCenter Host": "{{ vcenter_host }}"}}'),
+        },
+        'pre_update_success_field': {
+            'placeholder': "Dotted path in the JSON answer, e.g. item2.workflowStatus",
+        },
+        'pre_update_success_value': {
+            'placeholder': "e.g. Completed. Empty field and value: HTTP 2xx is enough",
+        },
         'server_ssh_key': {
             'rows': 4,
             'placeholder': "-----BEGIN OPENSSH PRIVATE KEY-----",
@@ -1862,7 +1880,21 @@ class CheckmkSettingsView(DefaultModelView):
                     [rules.Field('cmk_user'),
                      rules.Field('cmk_secret'),
                      rules.Field('cmk_server_address')]),
-            section('4', 'aux', 'Automatic Download & Certificates',
+            section('4', 'cond', 'Before the Update: Call a URL',
+                    'Optional, e.g. for a VM snapshot: before a site is updated '
+                    'the playbook POSTs the body to the URL, from the Syncer '
+                    'host. The update of that server goes on only after HTTP 2xx '
+                    'and, when set, the success field of the JSON answer having '
+                    'the success value; otherwise it stops before the downtime. '
+                    'The body may use {{ SERVER }}, {{ SITE }}, {{ CMK_VERSION }}, '
+                    '{{ CMK_EDITION }} and the Ansible custom variables of the site.',
+                    [rules.Field('pre_update_url'),
+                     rules.Field('pre_update_token'),
+                     rules.Field('pre_update_body'),
+                     rules.Field('pre_update_success_field'),
+                     rules.Field('pre_update_success_value'),
+                     rules.Field('pre_update_timeout')]),
+            section('5', 'aux', 'Automatic Download & Certificates',
                     'Optional: subscription creds and proxy for '
                     'auto-version-download and paths to webserver certs for '
                     'auto-renewal.',
@@ -1872,7 +1904,7 @@ class CheckmkSettingsView(DefaultModelView):
                      rules.Field('webserver_certificate'),
                      rules.Field('webserver_certificate_private_key'),
                      rules.Field('webserver_certificate_intermediate')]),
-            section('5', 'aux', 'Weekly Schedule',
+            section('6', 'aux', 'Weekly Schedule',
                     'Optional: what to do once a week on this day and hour. '
                     'The cron group Checkmk Server: Scheduled Updates runs it; '
                     'it is set up and switched on with the first schedule.',
@@ -1903,6 +1935,7 @@ class CheckmkSettingsView(DefaultModelView):
     form_overrides = {
         'cmk_version': StringField,
         'schedule_weekday': SelectField,
+        'pre_update_body': TextAreaField,
     }
 
     def scaffold_form(self):
