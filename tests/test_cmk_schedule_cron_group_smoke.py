@@ -58,6 +58,31 @@ eq(group().enabled, False, 'group on after the settings was deleted')
 # --- self_configure path: a sync without changes keeps it as it is
 sync_cron_group()
 eq(CronGroup.objects(name=CRON_TASK).count(), 1, 'one group only')
+
+# --- Run weekly run now: queued for the next cron pass, group on and forced
+from unittest import mock
+from application.plugins.checkmk import server_schedule
+test = CheckmkSettings(name='test', cmk_version='2.4.0p12', schedule_update_version=True)
+test.save()
+nothing = CheckmkSettings(name='nothing')
+nothing.save()
+body = client.post('/admin/checkmksettings/action/', data={
+    'action': 'run_weekly_now', 'rowid': [str(test.id), str(nothing.id)],
+    'csrf_token': csrf('/admin/checkmksettings/')}, follow_redirects=True).get_data(as_text=True)
+eq('starts on the next cron pass' in body, True, 'queued message')
+eq('Nothing to run for nothing' in body, True, 'message for a settings without action')
+eq(CheckmkSettings.objects.get(name='test').schedule_run_now, True, 'run queued')
+eq(CheckmkSettings.objects.get(name='nothing').schedule_run_now, False, 'empty run queued')
+eq((group().enabled, group().run_once_next), (True, True), 'group on and forced')
+
+# --- the next cron pass runs it once, then the group is off again
+majors = [{'major': '2.4.0', 'version': '2.4.0p15'}]
+with mock.patch.object(server_schedule.download_catalog, 'fetch', return_value=majors):
+    server_schedule.run_scheduled_updates()
+test.reload()
+eq((test.cmk_version, test.schedule_run_now, test.schedule_last_status),
+   ('2.4.0p15', False, 'success'), 'run done once')
+eq(group().enabled, False, 'group on after the requested run')
 print('CRON_GROUP_OK')
 '''
 

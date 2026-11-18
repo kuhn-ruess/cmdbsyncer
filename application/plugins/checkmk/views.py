@@ -75,7 +75,7 @@ from .list_source import OUTCOME_TEMPLATE_FIELDS
 from . import download_catalog
 from .ssh_key import check_ssh_private_key
 from .server_schedule import (
-    PLAYBOOK, SkipRun, site_servers, depends_on, dependency_chain,
+    PLAYBOOK, SkipRun, site_servers, depends_on, dependency_chain, request_run,
 )
 from .notification_rules import JINJA_FIELDS, validate_outcome_jinja
 
@@ -2037,6 +2037,24 @@ class CheckmkSettingsView(DefaultModelView):
         """
         url = url_for('.set_cmk_version_form', ids=','.join(ids))
         return redirect(url)
+
+    @action('run_weekly_now', 'Run weekly run now',
+            'Run the weekly run of the selected settings on the next cron pass, '
+            'whatever weekday and hour say?')
+    def action_run_weekly_now(self, ids):
+        """
+        Test the weekly run without waiting for its day: the next pass of
+        the cron group Checkmk Server: Scheduled Updates runs it
+        """
+        queued, skipped = request_run(CheckmkSettings.objects(id__in=ids))
+        if queued:
+            flash(f"Weekly run of {', '.join(queued)} starts on the next cron pass, "
+                  "within a few minutes. The result shows in the Schedule column "
+                  "and under Log, source Checkmk Server.", 'success')
+        if skipped:
+            flash(f"Nothing to run for {', '.join(skipped)}: tick Check for new "
+                  "version or Install and update the sites first.", 'warning')
+        return redirect(url_for('.index_view'))
 
     @action('run_server_mngmt', 'Run Manage OMD Server',
             'Install or update Checkmk on the servers of the enabled sites '

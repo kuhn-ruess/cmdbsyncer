@@ -504,6 +504,30 @@ def debug_host(hostname, debug):
 
 
 #.
+#   .-- Command: Weekly run of a CMK Server Settings, now
+@cli_cmk.command('run_weekly_now')
+@click.option("--debug", is_flag=True)
+@click.argument('settings_name')
+def cli_run_weekly_now(settings_name, debug):  # pylint: disable=unused-argument
+    """
+    Run the weekly run of SETTINGS_NAME (CMK Server Settings) right now,
+    whatever weekday and hour say: version check, playbook, log entry
+    """
+    # pylint: disable=import-outside-toplevel
+    from .models import CheckmkSettings
+    from .server_schedule import has_action, run_now
+    setting = CheckmkSettings.objects(name=settings_name).first()
+    if not setting:
+        print(f"{ColorCodes.FAIL}No CMK Server Settings named {settings_name}{ColorCodes.ENDC}")
+        raise SystemExit(1)
+    if not has_action(setting):
+        print(f"{ColorCodes.FAIL}{settings_name}: tick Check for new version or "
+              f"Install and update the sites first{ColorCodes.ENDC}")
+        raise SystemExit(1)
+    if run_now(setting) is not None:
+        raise SystemExit(1)
+
+#.
 #   .-- Command: Export Downtimes
 @cli_cmk.command('export_downtimes')
 @click.option("--debug", is_flag=True)

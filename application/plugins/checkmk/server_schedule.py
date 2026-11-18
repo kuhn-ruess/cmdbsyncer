@@ -41,10 +41,14 @@ def site_servers(setting):
                    CheckmkSite.objects(settings_master=setting, enabled=True)})
 
 
+def has_action(setting):
+    """Whether the weekly run of ``setting`` has something to do"""
+    return bool(setting.schedule_update_version or setting.schedule_run_playbook)
+
+
 def has_schedule(setting):
-    """Whether ``setting`` has a weekly run with something to do"""
-    return bool(setting.schedule_weekday and
-                (setting.schedule_update_version or setting.schedule_run_playbook))
+    """Whether ``setting`` has a weekly run, or one asked for now"""
+    return has_action(setting) and bool(setting.schedule_weekday or setting.schedule_run_now)
 
 
 def sync_cron_group():
@@ -89,6 +93,8 @@ def is_due(setting, now):
     """Whether the weekly run of ``setting`` is due at ``now``"""
     if not has_schedule(setting):
         return False
+    if setting.schedule_run_now:
+        return True
     if schedule_weekdays[now.weekday()][0] != setting.schedule_weekday:
         return False
     slot = now.replace(hour=int(setting.schedule_hour or 0),
@@ -229,6 +235,9 @@ def _run_one(setting, now):
     success.
     """
     details = []
+    if setting.schedule_run_now:
+        CheckmkSettings.objects(id=setting.id).update_one(set__schedule_run_now=False)
+        details.append(('started', 'on request, not by the schedule'))
     try:
         version = _check_dependency(setting, now)
     except SkipRun as exp:
@@ -285,5 +294,33 @@ def run_scheduled_updates(account=None, debug=False):  # pylint: disable=unused-
         print(f"\n{CC.HEADER}Weekly run of {setting.name}{CC.ENDC}")
         if (error := _run_one(setting, now)) is not None:
             errors.append(f"{setting.name}: {error}")
+    # A run asked for now is done: off again without a weekly schedule
+    sync_cron_group()
     if errors:
         task_failed(RuntimeError('; '.join(errors)))
+
+
+def request_run(settings):
+    """
+    Run the weekly run of ``settings`` on the next cron pass, whatever
+    weekday and hour say. Returns the names that can run and the names
+    without anything to do.
+    """
+    queued, skipped = [], []
+    for setting in settings:
+        if has_action(setting):
+            CheckmkSettings.objects(id=setting.id).update_one(set__schedule_run_now=True)
+            queued.append(setting.name)
+        else:
+            skipped.append(setting.name)
+    if queued:
+        sync_cron_group()
+        # pylint: disable-next=import-outside-toplevel
+        from application.models.cron import CronGroup
+        CronGroup.objects(name=CRON_TASK).update_one(set__run_once_next=True)
+    return queued, skipped
+
+
+def run_now(setting):
+    """The weekly run of ``setting`` right now, in this process: the error, None on success"""
+    return _run_one(setting, datetime.now())

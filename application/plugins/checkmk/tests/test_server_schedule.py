@@ -28,7 +28,7 @@ def _setting(**kwargs):
               'schedule_run_playbook': True, 'schedule_last_run': None,
               'schedule_depends_on': None, 'schedule_last_status': None,
               'schedule_last_message': None, 'schedule_last_version': None,
-              'ask_ssh_password': False,
+              'schedule_run_now': False, 'ask_ssh_password': False,
               'get_server_ssh_key': lambda: None}
     values.update(kwargs)
     return SimpleNamespace(**values)
@@ -55,6 +55,16 @@ class IsDueTest(unittest.TestCase):
     def test_due_again_a_week_later(self):
         setting = _setting(schedule_last_run=datetime(2026, 11, 3, 22, 15))
         self.assertTrue(server_schedule.is_due(setting, TUESDAY_22_30))
+
+    def test_run_now_is_due_on_any_day_and_hour(self):
+        setting = _setting(schedule_weekday=None, schedule_run_now=True,
+                           schedule_last_run=TUESDAY_22_30)
+        self.assertTrue(server_schedule.is_due(setting, TUESDAY_22_30.replace(hour=3)))
+
+    def test_run_now_needs_something_to_do(self):
+        self.assertFalse(server_schedule.is_due(
+            _setting(schedule_run_now=True, schedule_update_version=False,
+                     schedule_run_playbook=False), TUESDAY_22_30))
 
     def test_not_due_without_weekday_or_action(self):
         self.assertFalse(server_schedule.is_due(
@@ -110,6 +120,7 @@ class RunScheduledTest(unittest.TestCase):
             server_schedule, 'run_playbook',
             return_value=SimpleNamespace(status='success', pk='run1')).start()
         self.log = mock.patch.object(server_schedule, 'log').start()
+        self.sync = mock.patch.object(server_schedule, 'sync_cron_group').start()
         clock = mock.patch.object(server_schedule, 'datetime').start()
         clock.now.return_value = TUESDAY_22_30
         self.addCleanup(mock.patch.stopall)
@@ -130,6 +141,15 @@ class RunScheduledTest(unittest.TestCase):
         self.assertEqual(kwargs['target_host'], 'srv01,srv02')
         self.assertEqual(kwargs['provider'], 'cmk_sites:prod')
         self.assertTrue(kwargs['wait'])
+
+    def test_run_now_is_done_once_and_logged_as_such(self):
+        setting = _setting(schedule_weekday=None, schedule_run_now=True)
+        self.assertIsNone(self._run(setting))
+        updates = self.settings.objects.return_value.update_one.call_args_list
+        self.assertIn(mock.call(set__schedule_run_now=False), updates)
+        details = self.log.log.call_args.kwargs['details']
+        self.assertIn(('started', 'on request, not by the schedule'), details)
+        self.sync.assert_called_once()
 
     def test_settings_that_ask_for_the_password_set_the_version_only(self):
         setting = _setting(ask_ssh_password=True)

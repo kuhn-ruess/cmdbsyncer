@@ -807,6 +807,8 @@ class CheckmkSettings(db.Document):
     schedule_last_message = db.StringField()
     # The CMK Version the last successful run ended with
     schedule_last_version = db.StringField()
+    # Run on the next cron pass, whatever weekday and hour say
+    schedule_run_now = db.BooleanField(default=False)
 
     meta = {
         'strict': False
