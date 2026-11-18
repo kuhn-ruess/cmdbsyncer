@@ -1,15 +1,23 @@
 """
-LDAP Login Test: what the LDAP login runs with, and a test login of a
-directory user against exactly that, step by step
+LDAP Login Test: what the LDAP login runs with, the LDAP settings to edit,
+and a test login of a directory user against them, step by step
 """
-from flask import request
+from flask import flash, redirect, request, url_for
 from flask_admin import BaseView, expose
 from flask_login import current_user
 
 from application import app, log
-from application.docu_links import docu_links
 from application import enterprise
+from application.docu_links import docu_links
 from application.enterprise import has_feature, run_hook
+from application.helpers.local_config_file import LocalConfigError, is_writable, load
+from application.views.config import (
+    PROTECTED_KEYS,
+    _ldap_check_config,
+    _local_config_path,
+    _presets_view,
+    apply_preset,
+)
 
 
 def run_login_test(config, login, password):
@@ -88,22 +96,64 @@ def _settings():
     return rows
 
 
+def _ldap_preset(entries, form=None):
+    """
+    The LDAP card with the saved values, or with the values of a form
+    that was only tested. A protected value never goes to the browser.
+    """
+    preset = next(p for p in _presets_view(entries) if p['ident'] == 'ldap')
+    if form:
+        for entry in preset['keys']:
+            field = f"value__{entry['key']}"
+            if field in form and entry['key'] not in PROTECTED_KEYS:
+                raw = form[field]
+                entry['value'] = raw == 'true' if entry['type'] == 'bool' else raw
+    return preset
+
+
+def _waiting_for_restart(entries):
+    """LDAP keys whose saved value the running application does not use yet"""
+    keys = [entry['key'] for entry in _ldap_preset({})['keys']]
+    return [key for key in keys if key in entries and entries[key] != app.config.get(key)]
+
+
 class LdapLoginTestView(BaseView):
     """Settings, LDAP Login Test"""
 
     @expose('/', methods=('GET', 'POST'))
     def index(self):
-        """Preconditions, settings, and the test form with its result"""
+        """Preconditions, the LDAP settings, a test login and saving"""
+        path = _local_config_path()
+        action = request.form.get('_action') if request.method == 'POST' else None
+        if action == 'save':
+            try:
+                apply_preset(path, 'ldap')
+            except (LocalConfigError, ValueError) as error:
+                flash(f'Not saved: {error}', 'error')
+            return redirect(url_for('.index'))
+
         result = None
         login = ''
-        if request.method == 'POST':
+        if action == 'test':
             login = request.form.get('login', '')
-            result = run_login_test(app.config, login, request.form.get('password', ''))
+            result = run_login_test(_ldap_check_config(), login,
+                                    request.form.get('password', ''))
+        try:
+            entries = load(path)
+        except LocalConfigError as error:
+            flash(str(error), 'error')
+            entries = {}
         return self.render('admin/ldap_login_test.html',
                            preconditions=_preconditions(),
                            settings=_settings(),
+                           preset=_ldap_preset(entries, request.form if action else None),
+                           waiting=_waiting_for_restart(entries),
+                           writable=is_writable(path),
                            result=result,
                            login=login,
+                           # A tested service password is not sent back
+                           password_dropped=bool(action == 'test' and request.form.get(
+                               'value__LDAP_BIND_PASSWORD', '').strip()),
                            docs_url=docu_links['ent_ldap_login'])
 
     def is_accessible(self):

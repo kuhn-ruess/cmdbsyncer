@@ -1,0 +1,61 @@
+{# Fill buttons and fields of one preset, inside its form. Needs `preset`. #}
+{% if preset.fills %}
+<div style="margin-bottom: 0.75rem;">
+  {% for fill in preset.fills %}
+  <button type="button" class="btn btn-secondary btn-sm preset-fill"
+          data-values='{{ fill['values'] | tojson }}'>
+    Fill for {{ fill.label }}
+  </button>
+  {% endfor %}
+  <small style="margin-left: 8px; color: #888;">
+    Sets how users are found; server, service account and base stay.
+  </small>
+</div>
+{% endif %}
+
+<table class="table table-sm" style="margin-bottom: 0.75rem;">
+  <thead>
+    <tr>
+      <th style="width: 30%;">Key</th>
+      <th style="width: 12%;">Type</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for entry in preset['keys'] %}
+    <tr>
+      <td>
+        <code>{{ entry.key }}</code>
+        {% if entry.exists %}
+        <span class="badge"
+              style="background:#f39c12;color:#fff;font-size:10px;margin-left:4px;"
+              title="Already set in local_config.py — will be overwritten.">
+          set
+        </span>
+        {% endif %}
+      </td>
+      <td><small>{{ entry.type }}</small></td>
+      <td>
+        {% if entry.type == 'bool' %}
+        <select name="value__{{ entry.key }}"
+                class="form-control form-control-sm">
+          <option value="true" {% if entry.value %}selected{% endif %}>true</option>
+          <option value="false" {% if not entry.value %}selected{% endif %}>false</option>
+        </select>
+        {% else %}
+        <input type="text"
+               name="value__{{ entry.key }}"
+               value="{{ entry.value }}"
+               {% if entry.default %}placeholder="Example: {{ entry.default }}"{% endif %}
+               class="form-control form-control-sm">
+        {% endif %}
+        {% if entry.hint %}
+        <small style="color: #888; display:block; margin-top: 2px;">
+          {{ entry.hint }}
+        </small>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>

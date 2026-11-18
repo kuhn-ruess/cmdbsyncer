@@ -19,7 +19,6 @@ from application.helpers.local_config_presets import PRESETS, get_preset
 from application.helpers.sates import remove_changes
 from application.plugins.maintenance import clear_host_caches
 from application.views.default import DefaultModelView
-from application.views.ldap_login_test import run_login_test
 
 
 # Keys never shown in the editor. The real values stay in
@@ -126,6 +125,83 @@ def _preset_extra_note(ident):
     else:
         callback = request.url_root.rstrip('/') + '/oidc/callback'
     return f'Redirect URI to register at your identity provider: {callback}'
+
+
+def _apply_runtime(key, value):
+    """Hot-reload into the running `app.config` for non-restart keys."""
+    if key in RESTART_ONLY_KEYS:
+        return
+    if value is None:
+        app.config.pop(key, None)
+    else:
+        app.config[key] = value
+
+
+def apply_preset(path, ident):
+    """
+    Persist every key of preset *ident* from the submitted form in one go.
+    An empty ``str`` value of a protected key (``MAIL_PASSWORD``, whose
+    value never goes to the browser) means "leave it"; any other emptied
+    field, or a value equal to the default, goes back to the default.
+    """
+    preset = get_preset(ident)
+    if preset is None:
+        raise LocalConfigError(f"Unknown preset: {ident!r}")
+
+    applied = []
+    skipped_default = []
+    restart_only = False
+    existing = load(path)
+    for entry in preset['keys']:
+        key = entry['key']
+        value_type = entry['type']
+        field_name = f"value__{key}"
+        if field_name not in request.form:
+            continue
+        raw_value = request.form.get(field_name, '')
+        # Empty string for str-typed fields = "leave alone".
+        # Particularly important for protected keys whose current
+        # value is never pre-filled, so the form arrives empty by
+        # design unless the admin types something new.
+        if value_type == 'str' and not raw_value.strip():
+            # A field the card showed filled and the admin emptied:
+            # back to the default.
+            if key in existing and key not in PROTECTED_KEYS:
+                delete_key(path, key)
+                _restore_runtime_default(key)
+                applied.append(f'{key} (removed)')
+                restart_only = restart_only or key in RESTART_ONLY_KEYS
+            continue
+        coerced = _coerce(raw_value, value_type)
+        # Don't pollute local_config.py with values that match the
+        # BaseConfig default — they'd just be noise the admin has
+        # to delete later.
+        if coerced == _baseconfig_default(key):
+            # Set back to the default: a value in the file would stay
+            if key in existing:
+                delete_key(path, key)
+                _restore_runtime_default(key)
+                applied.append(f'{key} (default)')
+                restart_only = restart_only or key in RESTART_ONLY_KEYS
+            else:
+                skipped_default.append(key)
+            continue
+        set_key(path, key, coerced)
+        _apply_runtime(key, coerced)
+        applied.append(key)
+        if key in RESTART_ONLY_KEYS:
+            restart_only = True
+
+    if applied:
+        msg = f"Applied preset '{preset['name']}': {', '.join(applied)}"
+        if restart_only:
+            msg += '. Restart required for some keys to take effect.'
+        flash(msg, 'warning' if restart_only else 'success')
+    if skipped_default:
+        flash(
+            f"Skipped (already at default): {', '.join(skipped_default)}",
+            'info',
+        )
 
 
 def _presets_view(entries):
@@ -393,7 +469,7 @@ class ConfigModelView(DefaultModelView):
             return
         coerced = _coerce(raw_value, value_type)
         set_key(path, key, coerced)
-        self._apply_runtime(key, coerced)
+        _apply_runtime(key, coerced)
         self._flash_saved(key)
 
     def _do_add(self, path, key):
@@ -408,7 +484,7 @@ class ConfigModelView(DefaultModelView):
         raw_value = request.form.get('value', '')
         coerced = _coerce(raw_value, value_type)
         set_key(path, key, coerced)
-        self._apply_runtime(key, coerced)
+        _apply_runtime(key, coerced)
         flash(f'Added {key}', 'success')
 
     def _do_delete(self, path, key):
@@ -463,64 +539,7 @@ class ConfigModelView(DefaultModelView):
             flash(f"No keys from '{preset['name']}' were set", 'info')
 
     def _do_apply_preset(self, path):
-        """
-        Persist every key from a preset in one go. Empty ``str`` values
-        are silently skipped — the admin meant "don't set this"
-        (especially for protected keys like ``MAIL_PASSWORD`` whose
-        existing value is intentionally not echoed back).
-        """
-        ident = (request.form.get('preset') or '').strip()
-        preset = get_preset(ident)
-        if preset is None:
-            raise LocalConfigError(f"Unknown preset: {ident!r}")
-
-        applied = []
-        skipped_default = []
-        restart_only = False
-        existing = load(path)
-        for entry in preset['keys']:
-            key = entry['key']
-            value_type = entry['type']
-            field_name = f"value__{key}"
-            if field_name not in request.form:
-                continue
-            raw_value = request.form.get(field_name, '')
-            # Empty string for str-typed fields = "leave alone".
-            # Particularly important for protected keys whose current
-            # value is never pre-filled, so the form arrives empty by
-            # design unless the admin types something new.
-            if value_type == 'str' and not raw_value.strip():
-                # A field the card showed filled and the admin emptied:
-                # back to the default.
-                if key in existing and key not in PROTECTED_KEYS:
-                    delete_key(path, key)
-                    _restore_runtime_default(key)
-                    applied.append(f'{key} (removed)')
-                    restart_only = restart_only or key in RESTART_ONLY_KEYS
-                continue
-            coerced = _coerce(raw_value, value_type)
-            # Don't pollute local_config.py with values that match the
-            # BaseConfig default — they'd just be noise the admin has
-            # to delete later.
-            if coerced == _baseconfig_default(key):
-                skipped_default.append(key)
-                continue
-            set_key(path, key, coerced)
-            self._apply_runtime(key, coerced)
-            applied.append(key)
-            if key in RESTART_ONLY_KEYS:
-                restart_only = True
-
-        if applied:
-            msg = f"Applied preset '{preset['name']}': {', '.join(applied)}"
-            if restart_only:
-                msg += '. Restart required for some keys to take effect.'
-            flash(msg, 'warning' if restart_only else 'success')
-        if skipped_default:
-            flash(
-                f"Skipped (already at default): {', '.join(skipped_default)}",
-                'info',
-            )
+        apply_preset(path, (request.form.get('preset') or '').strip())
 
     @expose('/local_config/ldap_check', methods=('POST',))
     def ldap_check(self):
@@ -528,19 +547,12 @@ class ConfigModelView(DefaultModelView):
         Try the LDAP login of a directory user with the values of the LDAP
         card, before they are saved. Nothing is written but a log entry.
         """
+        # pylint: disable-next=import-outside-toplevel
+        from application.views.ldap_login_test import run_login_test
         return run_login_test(_ldap_check_config(), request.form.get('check_login'),
                               request.form.get('check_password'))
 
     # ---------- helpers ------------------------------------------------
-
-    def _apply_runtime(self, key, value):
-        """Hot-reload into the running `app.config` for non-restart keys."""
-        if key in RESTART_ONLY_KEYS:
-            return
-        if value is None:
-            app.config.pop(key, None)
-        else:
-            app.config[key] = value
 
     def _flash_saved(self, key):
         if key in RESTART_ONLY_KEYS:

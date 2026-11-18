@@ -176,66 +176,7 @@
                 <input type="hidden" name="_action" value="apply_preset">
                 <input type="hidden" name="preset" value="{{ preset.ident }}">
 
-                {% if preset.fills %}
-                <div style="margin-bottom: 0.75rem;">
-                  {% for fill in preset.fills %}
-                  <button type="button" class="btn btn-secondary btn-sm preset-fill"
-                          data-values='{{ fill['values'] | tojson }}'>
-                    Fill for {{ fill.label }}
-                  </button>
-                  {% endfor %}
-                  <small style="margin-left: 8px; color: #888;">
-                    Sets how users are found; server, service account and base stay.
-                  </small>
-                </div>
-                {% endif %}
-
-                <table class="table table-sm" style="margin-bottom: 0.75rem;">
-                  <thead>
-                    <tr>
-                      <th style="width: 30%;">Key</th>
-                      <th style="width: 12%;">Type</th>
-                      <th>Value</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {% for entry in preset['keys'] %}
-                    <tr>
-                      <td>
-                        <code>{{ entry.key }}</code>
-                        {% if entry.exists %}
-                        <span class="badge"
-                              style="background:#f39c12;color:#fff;font-size:10px;margin-left:4px;"
-                              title="Already set in local_config.py — will be overwritten.">
-                          set
-                        </span>
-                        {% endif %}
-                      </td>
-                      <td><small>{{ entry.type }}</small></td>
-                      <td>
-                        {% if entry.type == 'bool' %}
-                        <select name="value__{{ entry.key }}"
-                                class="form-control form-control-sm">
-                          <option value="true" {% if entry.value %}selected{% endif %}>true</option>
-                          <option value="false" {% if not entry.value %}selected{% endif %}>false</option>
-                        </select>
-                        {% else %}
-                        <input type="text"
-                               name="value__{{ entry.key }}"
-                               value="{{ entry.value }}"
-                               {% if entry.default %}placeholder="Example: {{ entry.default }}"{% endif %}
-                               class="form-control form-control-sm">
-                        {% endif %}
-                        {% if entry.hint %}
-                        <small style="color: #888; display:block; margin-top: 2px;">
-                          {{ entry.hint }}
-                        </small>
-                        {% endif %}
-                      </td>
-                    </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
+                {% include 'admin/_preset_fields.html' %}
 
                 {% if preset.extra_note %}
                 <div class="alert alert-warning" style="margin-bottom: 0.75rem; font-size: 13px;">
@@ -331,19 +272,8 @@
 
   </div>
 </div>
+{% include 'admin/_preset_fill_script.html' %}
 <script>
-// Fill buttons of a preset: set the fields of a directory type
-document.querySelectorAll('.preset-fill').forEach(function(button) {
-  button.addEventListener('click', function() {
-    var form = button.closest('form');
-    var values = JSON.parse(button.dataset.values);
-    Object.keys(values).forEach(function(key) {
-      var field = form.querySelector('[name="value__' + key + '"]');
-      if (field) { field.value = values[key]; }
-    });
-  });
-});
-
 // Test login of the LDAP card, with the values of its form
 document.querySelectorAll('.ldap-check').forEach(function(box) {
   var result = box.querySelector('.ldap-check-result');

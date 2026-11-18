@@ -4,13 +4,12 @@
 <div class="container mt-4">
     <h3>LDAP Login Test</h3>
     <p>
-        Tries the login of a directory user with the settings the login page
-        uses right now, and shows every step: connection, bind, search,
-        groups, the local user and its rights. Nothing is saved; each test is
-        logged under Settings, Log with source <code>AUTH</code>.
-        A changed setting counts here after the restart that also makes the
-        login page use it. To try values before saving, use the LDAP login
-        card in Configuration, Edit local_config.py.
+        Set up the LDAP login and try it with a directory user: every step is
+        shown, connection, bind, search, groups, the local user and its
+        rights. <strong>Test with these values</strong> uses the fields below
+        as they are and saves nothing; <strong>Save</strong> writes them to
+        <code>local_config.py</code>. Each test is logged under Settings, Log
+        with source <code>AUTH</code>.
         <a href="{{ docs_url }}" target="_blank" rel="noopener">Documentation</a>
     </p>
 
@@ -39,7 +38,13 @@
 
     <div class="card app-card mb-4">
         <div class="card-body">
-            <h5 class="card-title">Settings in use</h5>
+            <h5 class="card-title">Settings the running application uses</h5>
+            {% if waiting %}
+            <div class="alert alert-warning ldap-test-hint">
+                Saved, but used only after a restart of the application:
+                {{ waiting|join(', ') }}
+            </div>
+            {% endif %}
             <table class="table table-sm mb-0">
                 <tbody>
                 {% for name, value in settings %}
@@ -52,21 +57,36 @@
 
     <form method="POST" action="{{ url_for('.index') }}" class="card app-card mb-4" autocomplete="off">
         <div class="card-body">
-            <h5 class="card-title">Test a login</h5>
+            <h5 class="card-title">LDAP settings</h5>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% include 'admin/_preset_fields.html' %}
+
+            <h5 class="card-title mt-3">Test a login</h5>
             <div class="form-row">
-                <div class="col-md-5 mb-2">
+                <div class="col-md-6 mb-2">
                     <input type="text" name="login" class="form-control" value="{{ login }}"
-                           placeholder="Login, as typed on the login page" required>
+                           placeholder="Login, as typed on the login page">
                 </div>
-                <div class="col-md-5 mb-2">
+                <div class="col-md-6 mb-2">
                     <input type="password" name="password" class="form-control"
-                           placeholder="Password" autocomplete="new-password" required>
-                </div>
-                <div class="col-md-2 mb-2">
-                    <button type="submit" class="btn btn-primary btn-block">Test login</button>
+                           placeholder="Password" autocomplete="new-password">
                 </div>
             </div>
+            <button type="submit" name="_action" value="test" class="btn btn-primary">
+                Test with these values</button>
+            {% if password_dropped %}
+            <div class="alert alert-warning ldap-test-hint mb-2">
+                The tested LDAP_BIND_PASSWORD is not kept in the form: enter it
+                again before Save, an empty field keeps the stored one.
+            </div>
+            {% endif %}
+            <button type="submit" name="_action" value="save" class="btn btn-secondary"
+                    {% if not writable %}disabled title="local_config.py is not writable"{% endif %}>
+                Save</button>
+            <small class="text-muted ml-2">
+                Saving keeps an empty password field as it is; an emptied field
+                goes back to its default.
+            </small>
         </div>
     </form>
 
@@ -96,4 +116,5 @@
 <style>
 .ldap-test-hint { margin: 4px 0 0; padding: 4px 8px; font-size: 13px; }
 </style>
+{% include 'admin/_preset_fill_script.html' %}
 {% endblock %}

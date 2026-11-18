@@ -1,0 +1,13 @@
+<script>
+// Fill buttons of a preset: set the fields of a directory type
+document.querySelectorAll('.preset-fill').forEach(function(button) {
+  button.addEventListener('click', function() {
+    var form = button.closest('form');
+    var values = JSON.parse(button.dataset.values);
+    Object.keys(values).forEach(function(key) {
+      var field = form.querySelector('[name="value__' + key + '"]');
+      if (field) { field.value = values[key]; }
+    });
+  });
+});
+</script>

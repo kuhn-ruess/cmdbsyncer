@@ -17,6 +17,17 @@ from application.modules.log.models import LogEntry
 limiter.enabled = False
 URL = '/admin/ldap_login_test/'
 
+# The local_config.py of the smoke app holds the mongomock client, which
+# the editor can't parse: the page edits a file of its own here.
+import os
+import application.views.config as config_view
+import application.views.ldap_login_test as test_view
+from application.helpers.local_config_file import load
+CONFIG_FILE = os.path.join(os.environ['CMDBSYNCER_CONFIG_DIR'], 'edited_config.py')
+with open(CONFIG_FILE, 'w', encoding='utf-8') as handle:
+    handle.write('config = {}\\n')
+config_view._local_config_path = test_view._local_config_path = lambda: CONFIG_FILE
+
 
 def login(email, password):
     token = csrf('/login')
@@ -46,7 +57,8 @@ eq('service-secret' in page, False, 'the service password on the page')
 # --- without the enterprise test the test says so
 token = csrf(URL)
 page = check(URL, 200, method='post', data={
-    'login': 'alice', 'password': 'pw', 'csrf_token': token}).get_data(as_text=True)
+    '_action': 'test', 'login': 'alice', 'password': 'pw',
+    'csrf_token': token}).get_data(as_text=True)
 eq('The LDAP login test is not available' in page, True, 'test without enterprise')
 
 # --- with it, the running configuration is tested and the steps are shown
@@ -65,13 +77,51 @@ def fake_check(config, login_name, password):
 register_feature('ldap_check_login', fake_check)
 token = csrf(URL)
 page = check(URL, 200, method='post', data={
-    'login': ' Alice@Example.com ', 'password': 'pw', 'csrf_token': token}).get_data(as_text=True)
+    '_action': 'test', 'login': ' Alice@Example.com ', 'password': 'pw',
+    'csrf_token': token}).get_data(as_text=True)
 eq(seen, {'server': 'ldaps://ldap.example.com', 'login': 'alice@example.com',
           'password': 'pw'}, 'what the test ran with')
 eq('Failed: bind refused' in page and 'Check the password' in page, True, 'the steps')
 eq('The login fails' in page, True, 'the result')
 entry = LogEntry.objects(source='AUTH', message='LDAP login test for alice@example.com: failed')
 eq(entry.count(), 1, 'log entry of the test')
+
+# --- a test with changed fields uses them, shows them and saves nothing
+token = csrf(URL)
+page = check(URL, 200, method='post', data={
+    '_action': 'test', 'login': 'alice', 'password': 'pw', 'csrf_token': token,
+    'value__LDAP_SERVER': 'ldap://srv02.example.com',
+    'value__LDAP_BIND_PASSWORD': ''}).get_data(as_text=True)
+eq(seen['server'], 'ldap://srv02.example.com', 'server of the test')
+eq('value="ldap://srv02.example.com"' in page, True, 'tested value kept in the form')
+eq('LDAP_SERVER' in load(CONFIG_FILE), False, 'test saved the server')
+eq('again before Save' in page, False, 'password note without a password')
+token = csrf(URL)
+page = check(URL, 200, method='post', data={
+    '_action': 'test', 'login': 'alice', 'password': 'pw', 'csrf_token': token,
+    'value__LDAP_BIND_PASSWORD': 'typed-secret'}).get_data(as_text=True)
+eq('typed-secret' in page, False, 'tested password sent back')
+eq('again before Save' in page, True, 'note to enter the password again')
+
+# --- save writes the fields, an empty protected field keeps its value
+token = csrf(URL)
+response = check(URL, 302, method='post', data={
+    '_action': 'save', 'csrf_token': token,
+    'value__LDAP_SERVER': 'ldap://srv02.example.com',
+    'value__LDAP_BIND_PASSWORD': '', 'value__LDAP_AUTO_CREATE': 'false'})
+stored = load(CONFIG_FILE)
+eq(stored.get('LDAP_SERVER'), 'ldap://srv02.example.com', 'saved server')
+eq(stored.get('LDAP_AUTO_CREATE'), False, 'saved auto create')
+eq('LDAP_BIND_PASSWORD' in stored, False, 'empty password field written')
+page = check(URL, 200).get_data(as_text=True)
+eq('used only after a restart' in page and 'LDAP_SERVER' in page, True, 'restart note')
+eq('value="ldap://srv02.example.com"' in page, True, 'saved value in the form')
+
+# --- the default again removes the key instead of keeping the old value
+token = csrf(URL)
+check(URL, 302, method='post', data={
+    '_action': 'save', 'csrf_token': token, 'value__LDAP_AUTO_CREATE': 'true'})
+eq('LDAP_AUTO_CREATE' in load(CONFIG_FILE), False, 'auto create back to default')
 
 # --- only global admins
 plain = User(email='plain@example.com', name='plain', global_admin=False)
