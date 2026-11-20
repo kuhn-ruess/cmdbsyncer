@@ -344,8 +344,8 @@ PRESETS = [
             "only when it does not match. Start with **Fill for Active Directory** or "
             "**Fill for OpenLDAP**, enter server, service account and "
             "search base, then **Test login** with a directory user "
-            "before you apply. ``LDAP_ROLE_MAPPING`` is a nested "
-            "dict and stays in ``local_config.py`` on disk."
+            "before you apply. ``LDAP_ROLE_MAPPING`` gives directory "
+            "groups their rights."
         ),
         # Buttons on the card that fill the fields of a directory type.
         # Server, service account and base differ per site and stay.
@@ -409,6 +409,12 @@ PRESETS = [
             {'key': 'LDAP_AUTO_CREATE', 'type': 'bool', 'default': True,
              'hint': 'Create a local User record on first successful '
                      'LDAP login.'},
+            {'key': 'LDAP_ROLE_MAPPING', 'type': 'role_mapping', 'default': {},
+             'hint': 'Rights per directory group, the full DN of the group. '
+                     'A user gets the rights of all its groups. With at '
+                     'least one group the rights of LDAP users follow the '
+                     'directory on every login; without any they stay as '
+                     'set on the user.'},
             {'key': 'AUTH_DEBUG', 'type': 'bool', 'default': False,
              'hint': 'Write detailed login-flow steps to Settings → Log '
                      '(LDAP and remote_user hooks). Turn on temporarily '

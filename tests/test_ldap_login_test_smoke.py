@@ -1,6 +1,6 @@
 """
-Settings, LDAP Login Test: the preconditions of the LDAP login, the settings
-in use and a test login against them.
+Settings, LDAP Login, only with the licensed LDAP login: the preconditions
+of the LDAP login, the settings in use and a test login against them.
 
 See ``tests/web_smoke_helpers.py`` for why this needs a subprocess.
 """
@@ -15,7 +15,7 @@ from application.enterprise import register_feature
 from application.modules.log.models import LogEntry
 
 limiter.enabled = False
-URL = '/admin/ldap_login_test/'
+URL = '/admin/ldap_login/'
 
 # The local_config.py of the smoke app holds the mongomock client, which
 # the editor can't parse: the page edits a file of its own here.
@@ -47,9 +47,19 @@ eq(entry is not None, True, 'log entry for an LDAP login that cannot run')
 
 login('smoke@example.com', 'smoke-password')
 
+# --- without the licensed LDAP login the page is not there
+eq(client.get(URL).status_code in (302, 403, 404), True, 'page without the license')
+eq('href="/admin/ldap_login/"' in check('/admin/config/local_config', 200).get_data(as_text=True),
+   False, 'menu entry without the license')
+register_feature('ldap_login', lambda email, password: None)
+eq('href="/admin/ldap_login/"' in check('/admin/config/local_config', 200).get_data(as_text=True),
+   True, 'menu entry with the license')
+
 # --- the page names what is missing and the settings, never a password
 page = check(URL, 200).get_data(as_text=True)
-eq('Feature ldap_login licensed' in page, True, 'precondition of the feature')
+eq('<h3>LDAP Login</h3>' in page, True, 'title of the page')
+eq('Login test available' in page, True, 'precondition of the test')
+eq('Add group' in page, True, 'more groups for the role mapping')
 eq('Wrong Password' in page, True, 'what a failing precondition means')
 eq('ldaps://ldap.example.com' in page, True, 'the server in use')
 eq('service-secret' in page, False, 'the service password on the page')

@@ -61,6 +61,30 @@ if 'LDAP_USER_DN_TEMPLATE' in stored:
 if stored.get('LDAP_BIND_PASSWORD') != 'bind-secret':
     fail('empty protected field changed the password')
 
+# Rights per group, from the rows of the card; a row without group is left out
+group = 'cn=syncer,ou=groups,dc=example,dc=com'
+form = {'_action': 'apply_preset', 'preset': 'ldap', 'csrf_token': csrf(url),
+        'value__LDAP_ROLE_MAPPING': '1',
+        'value__LDAP_ROLE_MAPPING__0__group': group,
+        'value__LDAP_ROLE_MAPPING__0__global_admin': 'false',
+        'value__LDAP_ROLE_MAPPING__0__roles': ['host', 'log', 'no_such_role'],
+        'value__LDAP_ROLE_MAPPING__0__api_roles': ['all'],
+        'value__LDAP_ROLE_MAPPING__1__group': '',
+        'value__LDAP_ROLE_MAPPING__1__global_admin': 'true'}
+client.post(url, data=form, follow_redirects=True)
+stored = load(path)
+if stored.get('LDAP_ROLE_MAPPING') != {group: {'roles': ['host', 'log'],
+                                              'api_roles': ['all']}}:
+    fail('role mapping not stored: ' + repr(stored.get('LDAP_ROLE_MAPPING')))
+if stored.get('LDAP_SERVER') != 'ldap://srv01.example.com':
+    fail('role mapping changed other keys')
+page = client.get(url).get_data(as_text=True)
+if f'value="{group}"' not in page or 'name="value__LDAP_ROLE_MAPPING__1__group"' not in page:
+    fail('card does not show the mapping and an empty row')
+apply(LDAP_ROLE_MAPPING='1', LDAP_ROLE_MAPPING__0__group='')
+if 'LDAP_ROLE_MAPPING' in load(path):
+    fail('emptied mapping still stored')
+
 seen = {}
 def fake_check(config, login, password):
     seen.update(config=config, login=login, password=password)
@@ -77,6 +101,9 @@ response = client.post(url + '/ldap_check', data={
     'csrf_token': csrf(url), 'value__LDAP_SERVER': 'ldap://srv02.example.com',
     'value__LDAP_USER_DN_TEMPLATE': '', 'value__LDAP_BIND_PASSWORD': '',
     'value__LDAP_AUTO_CREATE': 'false',
+    'value__LDAP_ROLE_MAPPING': '1',
+    'value__LDAP_ROLE_MAPPING__0__group': group,
+    'value__LDAP_ROLE_MAPPING__0__global_admin': 'true',
     'check_login': 'SRV01@example.com', 'check_password': 'pw'})
 if response.status_code != 200 or response.get_json()['ok'] is not False:
     fail('check answer: ' + response.get_data(as_text=True)[:300])
@@ -87,6 +114,8 @@ if config['LDAP_BIND_PASSWORD'] != 'bind-secret':
     fail('check did not use the stored password')
 if config['LDAP_USER_DN_TEMPLATE'] != '' or config['LDAP_AUTO_CREATE'] is not False:
     fail('check config: ' + repr({k: v for k, v in config.items() if k.startswith('LDAP')}))
+if config['LDAP_ROLE_MAPPING'] != {group: {'global_admin': True}}:
+    fail('check did not use the card mapping: ' + repr(config['LDAP_ROLE_MAPPING']))
 if seen['login'] != 'srv01@example.com' or seen['password'] != 'pw':
     fail('check login: ' + repr(seen['login']))
 entry = LogEntry.objects(source='AUTH',

@@ -1,13 +1,13 @@
 """
-LDAP Login Test: what the LDAP login runs with, the LDAP settings to edit,
-and a test login of a directory user against them, step by step
+Settings, LDAP Login: what the LDAP login runs with, the LDAP settings to
+edit, and a test login of a directory user against them, step by step.
+Only there with the licensed enterprise LDAP login.
 """
 from flask import flash, redirect, request, url_for
 from flask_admin import BaseView, expose
 from flask_login import current_user
 
 from application import app, log
-from application import enterprise
 from application.docu_links import docu_links
 from application.enterprise import has_feature, run_hook
 from application.helpers.local_config_file import LocalConfigError, is_writable, load
@@ -17,6 +17,7 @@ from application.views.config import (
     _local_config_path,
     _presets_view,
     apply_preset,
+    role_mapping_from_form,
 )
 
 
@@ -51,16 +52,11 @@ def _preconditions():
     (ok, text, hint). When one fails, the login page silently checks the
     local password only and answers "Wrong Password".
     """
-    status = enterprise.load_status or 'not installed'
     rows = [
-        (status == 'active', f"Enterprise package: {status}",
-         "Install cmdbsyncer-enterprise and a license, then restart the application."),
-        (has_feature('ldap_login'), "Feature ldap_login licensed",
-         "The license has to include ldap_login, see Settings, License."),
         (has_feature('ldap_check_login'), "Login test available",
          "Update cmdbsyncer-enterprise to 0.4.5 or newer and restart."),
         (bool(app.config.get('LDAP_LOGIN')), "LDAP_LOGIN is on",
-         "Switch on LDAP_LOGIN in local_config.py and restart."),
+         "Set LDAP_LOGIN to true below, save and restart."),
     ]
     return [{'ok': ok, 'text': text, 'hint': None if ok else hint}
             for ok, text, hint in rows]
@@ -105,7 +101,9 @@ def _ldap_preset(entries, form=None):
     if form:
         for entry in preset['keys']:
             field = f"value__{entry['key']}"
-            if field in form and entry['key'] not in PROTECTED_KEYS:
+            if entry['type'] == 'role_mapping' and field in form:
+                entry['value'] = role_mapping_from_form(form, entry['key'])
+            elif field in form and entry['key'] not in PROTECTED_KEYS:
                 raw = form[field]
                 entry['value'] = raw == 'true' if entry['type'] == 'bool' else raw
     return preset
@@ -118,7 +116,7 @@ def _waiting_for_restart(entries):
 
 
 class LdapLoginTestView(BaseView):
-    """Settings, LDAP Login Test"""
+    """Settings, LDAP Login"""
 
     @expose('/', methods=('GET', 'POST'))
     def index(self):
@@ -157,4 +155,8 @@ class LdapLoginTestView(BaseView):
                            docs_url=docu_links['ent_ldap_login'])
 
     def is_accessible(self):
-        return current_user.is_authenticated and current_user.global_admin
+        return (current_user.is_authenticated and current_user.global_admin
+                and has_feature('ldap_login'))
+
+    def is_visible(self):
+        return has_feature('ldap_login')

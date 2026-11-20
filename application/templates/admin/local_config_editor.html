@@ -198,9 +198,9 @@
                   An emptied field goes back to its default; an empty protected field keeps its value.
                 </small>
               </form>
-              {% if preset.ident == 'ldap' %}
+              {% if preset.ident == 'ldap' and ldap_login %}
               <p style="margin: 0.75rem 0 0;">
-                <a href="{{ url_for('ldap_login_test.index') }}">LDAP Login Test</a>:
+                <a href="{{ url_for('ldap_login.index') }}">Settings, LDAP Login</a>:
                 whether the login page tries LDAP, with which settings, and a
                 test login against the saved and running configuration.
               </p>

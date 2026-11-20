@@ -930,7 +930,7 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
                                menu_icon_type='fa', menu_icon_value='fa-id-card'))
 
     from application.views.ldap_login_test import LdapLoginTestView
-    admin.add_view(LdapLoginTestView(name="LDAP Login Test", endpoint="ldap_login_test",
+    admin.add_view(LdapLoginTestView(name="LDAP Login", endpoint="ldap_login",
                                      category="Settings", menu_icon_type='fa',
                                      menu_icon_value='fa-stethoscope'))
 

@@ -16,8 +16,9 @@ Design goals:
 - **Atomic on disk** — write to a sibling tempfile and `os.replace`,
   so a crash mid-write cannot leave a partial file.
 - **Safe values only** — values must be primitive (str / int / float /
-  bool / None). `set_key` rejects anything else rather than quietly
-  serialising something unexpected.
+  bool / None), or dicts and lists of them, like LDAP_ROLE_MAPPING.
+  `set_key` rejects anything else rather than quietly serialising
+  something unexpected.
 """
 import ast
 import logging
@@ -140,10 +141,21 @@ def _validate_key(key):
 def _validate_value(value):
     if isinstance(value, _ALLOWED_VALUE_TYPES):
         return
+    # A literal of dicts and lists still reads back with literal_eval
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise LocalConfigError(
+                    f"Dict key {key!r} is not allowed here, only strings.")
+            _validate_value(item)
+        return
+    if isinstance(value, list):
+        for item in value:
+            _validate_value(item)
+        return
     raise LocalConfigError(
         f"Value type {type(value).__name__} is not allowed here — only "
-        f"str / int / float / bool / None. Edit the file by hand if you "
-        f"need a list or nested dict."
+        f"str / int / float / bool / None, and dicts and lists of them."
     )
 
 

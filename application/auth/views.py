@@ -178,7 +178,7 @@ def login():  # pylint: disable=too-many-return-statements,too-many-branches,too
             log.log("LDAP login is on, but the enterprise LDAP login is not "
                     "active: only local passwords are checked", source="AUTH",
                     details=[('email', email),
-                             ('check', 'Settings, LDAP Login Test')])
+                             ('check', 'Settings, License')])
         elif app.config['LDAP_LOGIN']:
             try:
                 ldap_user = run_hook('ldap_login', email, password)

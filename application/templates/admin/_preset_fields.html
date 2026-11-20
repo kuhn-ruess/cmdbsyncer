@@ -42,6 +42,93 @@
           <option value="true" {% if entry.value %}selected{% endif %}>true</option>
           <option value="false" {% if not entry.value %}selected{% endif %}>false</option>
         </select>
+        {% elif entry.type == 'role_mapping' %}
+        {# Marks the field as sent, its rows follow as value__KEY__<n>__* #}
+        <input type="hidden" name="value__{{ entry.key }}" value="1">
+        {% set rows = (entry.value or {}).items()|list + [('', {})] %}
+        <div class="role-mapping">
+        {% for group, rights in rows %}
+        {% set field = 'value__' ~ entry.key ~ '__' ~ loop.index0 %}
+        <div class="role-mapping-row border rounded p-2 mb-2">
+          <input type="text" name="{{ field }}__group" value="{{ group }}"
+                 class="form-control form-control-sm mb-1"
+                 placeholder="{{ 'Add a group: ' if not group }}CN=Syncer-Admins,OU=Groups,DC=example,DC=com">
+          <div class="form-row">
+            <div class="col-md-3">
+              <small>Global admin</small>
+              <select name="{{ field }}__global_admin" class="form-control form-control-sm">
+                <option value="false">no</option>
+                <option value="true" {% if rights.global_admin %}selected{% endif %}>yes</option>
+              </select>
+            </div>
+            <div class="col-md-5">
+              <small>Roles</small>
+              <select name="{{ field }}__roles" multiple size="5"
+                      class="form-control form-control-sm">
+                {% for ident, label in entry.roles %}
+                <option value="{{ ident }}" {% if ident in (rights.roles or []) %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <small>API roles</small>
+              <select name="{{ field }}__api_roles" multiple size="5"
+                      class="form-control form-control-sm">
+                {% for ident, label in entry.api_roles %}
+                <option value="{{ ident }}" {% if ident in (rights.api_roles or []) %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <small class="text-muted role-mapping-selected"></small>
+        </div>
+        {% endfor %}
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm role-mapping-add mb-1">
+          Add group</button>
+        <small class="text-muted d-block">
+          One row per group. Ctrl or Cmd selects several roles. Empty the
+          group of a row to remove it.
+        </small>
+        <script>
+        // The chosen roles of a row in one line: the lists show only a few
+        function roleMappingSummary(row) {
+          var chosen = Array.prototype.map.call(
+            row.querySelectorAll('select[multiple] option:checked'),
+            function(option) { return option.text; });
+          row.querySelector('.role-mapping-selected').textContent =
+            chosen.length ? 'Selected: ' + chosen.join(', ') : '';
+        }
+        document.querySelectorAll('.role-mapping').forEach(function(list) {
+          if (list.dataset.bound) { return; }
+          list.dataset.bound = '1';
+          list.addEventListener('change', function(event) {
+            roleMappingSummary(event.target.closest('.role-mapping-row'));
+          });
+          list.querySelectorAll('.role-mapping-row').forEach(roleMappingSummary);
+        });
+        // Add group: a copy of the last row, emptied, with the next number
+        document.querySelectorAll('.role-mapping-add').forEach(function(button) {
+          if (button.dataset.bound) { return; }
+          button.dataset.bound = '1';
+          button.addEventListener('click', function() {
+            var list = button.previousElementSibling;
+            var rows = list.querySelectorAll('.role-mapping-row');
+            var row = rows[rows.length - 1].cloneNode(true);
+            row.querySelectorAll('[name]').forEach(function(field) {
+              field.name = field.name.replace(/__\d+__/, '__' + rows.length + '__');
+              if (field.tagName === 'INPUT') { field.value = ''; }
+              Array.prototype.forEach.call(field.options || [], function(option) {
+                option.selected = false;
+              });
+              if (field.name.endsWith('__global_admin')) { field.value = 'false'; }
+            });
+            list.appendChild(row);
+            roleMappingSummary(row);
+            row.querySelector('input').focus();
+          });
+        });
+        </script>
         {% else %}
         <input type="text"
                name="value__{{ entry.key }}"

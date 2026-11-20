@@ -17,6 +17,7 @@ from application.helpers.local_config_file import (
 )
 from application.helpers.local_config_presets import PRESETS, get_preset
 from application.helpers.sates import remove_changes
+from application.models.user import api_roles as API_ROLES, roles as ROLES
 from application.plugins.maintenance import clear_host_caches
 from application.views.default import DefaultModelView
 
@@ -53,6 +54,7 @@ RESTART_ONLY_KEYS = frozenset({
     'LDAP_BIND_USER', 'LDAP_BIND_PASSWORD',
     'LDAP_SEARCH_BASE', 'LDAP_SEARCH_FILTER',
     'LDAP_REQUIRED_GROUP', 'LDAP_NAME_ATTR', 'LDAP_AUTO_CREATE',
+    'LDAP_ROLE_MAPPING',
     'OIDC_ACCOUNT', 'OIDC_SCOPES', 'OIDC_EMAIL_CLAIM', 'OIDC_NAME_CLAIM',
     'OIDC_GROUPS_CLAIM', 'OIDC_REQUIRED_GROUP', 'OIDC_AUTO_CREATE',
     'OIDC_ADMIN_GROUP', 'OIDC_DEFAULT_ROLES',
@@ -127,6 +129,45 @@ def _preset_extra_note(ident):
     return f'Redirect URI to register at your identity provider: {callback}'
 
 
+def role_mapping_from_form(form, key):
+    """
+    The group to rights mapping of a role_mapping field. Each row of the
+    card sends value__<key>__<n>__group, __global_admin, __roles and
+    __api_roles; a row without a group is left out, unknown roles too.
+    """
+    prefix = f'value__{key}__'
+    rows = sorted({name[len(prefix):].split('__', 1)[0] for name in form
+                   if name.startswith(prefix)},
+                  key=lambda row: int(row) if row.isdigit() else 0)
+    known_roles = {ident for ident, _label in ROLES}
+    known_api_roles = {ident for ident, _label in API_ROLES}
+    mapping = {}
+    for row in rows:
+        group = form.get(f'{prefix}{row}__group', '').strip()
+        if not group:
+            continue
+        rights = {}
+        if form.get(f'{prefix}{row}__global_admin') == 'true':
+            rights['global_admin'] = True
+        selected = [role for role in form.getlist(f'{prefix}{row}__roles')
+                    if role in known_roles]
+        if selected:
+            rights['roles'] = selected
+        selected = [role for role in form.getlist(f'{prefix}{row}__api_roles')
+                    if role in known_api_roles]
+        if selected:
+            rights['api_roles'] = selected
+        mapping[group] = rights
+    return mapping
+
+
+def _form_value(entry, form):
+    """The typed value of a preset field in ``form``"""
+    if entry['type'] == 'role_mapping':
+        return role_mapping_from_form(form, entry['key'])
+    return _coerce(form.get(f"value__{entry['key']}", ''), entry['type'])
+
+
 def _apply_runtime(key, value):
     """Hot-reload into the running `app.config` for non-restart keys."""
     if key in RESTART_ONLY_KEYS:
@@ -172,7 +213,7 @@ def apply_preset(path, ident):
                 applied.append(f'{key} (removed)')
                 restart_only = restart_only or key in RESTART_ONLY_KEYS
             continue
-        coerced = _coerce(raw_value, value_type)
+        coerced = _form_value(entry, request.form)
         # Don't pollute local_config.py with values that match the
         # BaseConfig default — they'd just be noise the admin has
         # to delete later.
@@ -232,6 +273,8 @@ def _presets_view(entries):
                 value = _baseconfig_default(entry['key'])
             else:
                 value = entry['default']
+            if entry['type'] == 'role_mapping':
+                entry = {**entry, 'roles': ROLES, 'api_roles': API_ROLES}
             preset_keys.append({**entry, 'exists': exists, 'value': value})
             if exists:
                 overlap += 1
@@ -269,7 +312,7 @@ def _ldap_check_config():
                 default = _baseconfig_default(key)
                 config[key] = '' if default is _MISSING else default
             continue
-        config[key] = _coerce(raw_value, entry['type'])
+        config[key] = _form_value(entry, request.form)
     return config
 
 
@@ -452,6 +495,7 @@ class ConfigModelView(DefaultModelView):
             writable=writable,
             presets=presets_view,
             ldap_check=has_feature('ldap_check_login'),
+            ldap_login=has_feature('ldap_login'),
         )
 
     # ---------- action handlers -----------------------------------------

@@ -30,7 +30,7 @@ _CONFIG = _load('application.config', 'application', 'config.py')
 PRESETS = _PRESETS.PRESETS
 BaseConfig = _CONFIG.BaseConfig
 
-VALID_TYPES = {'str', 'int', 'float', 'bool', 'none'}
+VALID_TYPES = {'str', 'int', 'float', 'bool', 'none', 'role_mapping'}
 
 
 class TestLocalConfigPresets(unittest.TestCase):
@@ -73,6 +73,7 @@ class TestLocalConfigPresets(unittest.TestCase):
     def test_default_matches_declared_type(self):
         checkers = {
             'str': str, 'int': int, 'float': float, 'bool': bool,
+            'role_mapping': dict,
         }
         for preset in PRESETS:
             for entry in preset['keys']:
