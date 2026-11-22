@@ -134,6 +134,9 @@ def check_condition(attr_value, needle, condition):
             return True
     elif condition == 'string_in_list':
         if not isinstance(attr_value, list):
+            if not isinstance(attr_value, str):
+                # None or a number is no list to search in: no match
+                return False
             attr_value = [x.strip() for x in attr_value.split(',')]
         if needle in attr_value:
             return True
@@ -141,6 +144,9 @@ def check_condition(attr_value, needle, condition):
         # Warning, this condition needs a list given by
         # the user and checks if the attribute is in it
         if not isinstance(needle, list):
+            if not isinstance(needle, str):
+                # None or a number is no list to search in: no match
+                return False
             needle = [x.strip() for x in needle.split(',')]
         if attr_value in needle:
             return True

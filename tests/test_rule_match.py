@@ -107,6 +107,16 @@ class TestCheckCondition(unittest.TestCase):
     def test_in_list_miss(self):
         self.assertFalse(check_condition("qa", "prod, dev", "in_list"))
 
+    def test_list_conditions_none_or_number_no_match(self):
+        self.assertFalse(check_condition(None, "prod", "string_in_list"))
+        self.assertFalse(check_condition(42, "42", "string_in_list"))
+        self.assertFalse(match(None, "prod", "string_in_list"))
+        self.assertTrue(match(42, "42", "string_in_list", negate=True))
+        self.assertFalse(check_condition("prod", None, "in_list"))
+        self.assertFalse(check_condition("42", 42, "in_list"))
+        self.assertFalse(match("prod", None, "in_list"))
+        self.assertTrue(match("42", 42, "in_list", negate=True))
+
     # -- swith / ewith --
 
     def test_starts_with(self):
