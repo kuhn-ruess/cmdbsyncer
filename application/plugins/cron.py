@@ -330,14 +330,16 @@ def jobs():  # pylint: disable=too-many-branches,too-many-statements
                     source='cron',
                 )
 
-    # One entry per pass, including the passes where nothing was due.
-    # Without it a quiet log is ambiguous: a scheduler that stopped
-    # firing looks exactly like a schedule with nothing to do.
+    # One record per pass, including the passes where nothing was due.
+    # Without it a quiet stream is ambiguous: a scheduler that stopped
+    # firing looks exactly like a schedule with nothing to do. It goes to
+    # the log pipeline only; in the Log view it would bury the real
+    # entries, and the start page reads last_cron_pass instead.
     if started:
         message = f"Cron pass: started {', '.join(started)}"
     else:
         message = f"Cron pass: nothing due ({checked} groups checked)"
-    log.log(message, source="cron",
+    log.stream(message, source="cron",
             details=[('groups_checked', checked),
                      ('groups_started', len(started))])
 
