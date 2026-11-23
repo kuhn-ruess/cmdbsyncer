@@ -159,11 +159,12 @@ def _check_dependency(setting, now):
 
 def _set_version(setting, version, details):
     """Set the CMK Version of ``setting``"""
-    details.append(('version_before', setting.cmk_version or ''))
-    details.append(('version_after', version))
     if version == setting.cmk_version:
+        details.append(('version', f"{version}, up to date"))
         print(f"{CC.OKBLUE} *{CC.ENDC} {setting.name}: {version} is up to date")
         return
+    details.append(('version_before', setting.cmk_version or ''))
+    details.append(('version_after', version))
     print(f"{CC.OKGREEN} *{CC.ENDC} {setting.name}: "
           f"{setting.cmk_version} set to {version}")
     CheckmkSettings.objects(id=setting.id).update_one(set__cmk_version=version)
@@ -192,10 +193,6 @@ def _run_playbook(setting, details):
     details.append(('servers', ', '.join(servers)))
     print(f"{CC.OKGREEN} *{CC.ENDC} {setting.name}: Manage OMD Server "
           f"for {', '.join(servers)}")
-    log.log(f"Weekly run of {setting.name}: Manage OMD Server started",
-            source=LOG_SOURCE,
-            details=[('settings', setting.name), ('servers', ', '.join(servers)),
-                     ('version', setting.cmk_version or '')])
     # One run after the other: a server may have sites of several settings.
     stats = run_playbook(
         PLAYBOOK,

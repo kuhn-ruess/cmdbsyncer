@@ -190,11 +190,17 @@ class RunScheduledTest(unittest.TestCase):
                                 set__schedule_last_version='2.4.0p15'),
                       self._updates())
         logged = [call.args[0] for call in self.log.log.call_args_list]
-        self.assertEqual(logged, ['Weekly run of prod: Manage OMD Server started',
-                                  'Weekly run of prod: success'])
+        self.assertEqual(logged, ['Weekly run of prod: success'])
         details = dict(self.log.log.call_args.kwargs['details'])
         self.assertEqual(details['version_before'], '2.4.0p12')
+        self.assertEqual(details['version_after'], '2.4.0p15')
         self.assertEqual(details['ansible_run'], 'run1')
+
+    def test_unchanged_version_is_logged_once(self):
+        self._run(_setting(cmk_version='2.4.0p15'))
+        details = dict(self.log.log.call_args.kwargs['details'])
+        self.assertEqual(details['version'], '2.4.0p15, up to date')
+        self.assertNotIn('version_before', details)
 
     def _with_dependency(self, **dependency):
         values = {'id': 'test-id', 'name': 'test', 'cmk_version': '2.4.0p14',
