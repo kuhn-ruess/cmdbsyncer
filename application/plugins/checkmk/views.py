@@ -1891,8 +1891,12 @@ class CheckmkSettingsView(DefaultModelView):
                     [rules.Field('pre_update_url'),
                      rules.Field('pre_update_token'),
                      rules.Field('pre_update_body'),
+                     # Field and value belong together: one row
+                     rules.HTML("<div class='form-row'><div class='col'>"),
                      rules.Field('pre_update_success_field'),
+                     rules.HTML("</div><div class='col'>"),
                      rules.Field('pre_update_success_value'),
+                     rules.HTML("</div></div>"),
                      rules.Field('pre_update_timeout')]),
             section('5', 'aux', 'Automatic Download & Certificates',
                     'Optional: subscription creds and proxy for '

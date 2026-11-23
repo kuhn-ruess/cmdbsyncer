@@ -57,6 +57,9 @@ client.post('/login', data={'login_email': 'smoke@example.com', 'password': 'smo
 page = check('/admin/checkmksettings/new/', 200).get_data(as_text=True)
 eq('Before the Update: Call a URL' in page and 'name="pre_update_body"' in page, True,
    'form section')
+row = page.split("<div class='form-row'><div class='col'>", 1)[1].split('pre_update_timeout')[0]
+eq('name="pre_update_success_field"' in row and 'name="pre_update_success_value"' in row,
+   True, 'success field and value in one row')
 print('PRE_UPDATE_OK')
 '''
 
