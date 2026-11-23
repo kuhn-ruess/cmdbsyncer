@@ -42,6 +42,7 @@ class StoredUser:
         self.roles = []
         self.contact_groups = []
         self.disable_login = False
+        self.remove_if_found = None
         self.generated_by_rule = None
         self.password = ''
         self.saved = 0
@@ -630,3 +631,76 @@ class TestCheckmkUserGeneration(_SyncerTestCase):
 
         self.assertEqual(rendered['name'], 'grp-dba')
         self.assertEqual(rendered['original_name'], 'dba')
+
+
+class TestRetireUsers(_SyncerTestCase):
+    """Generated users whose group is gone are marked for removal"""
+
+    @patch('application.plugins.checkmk.user_generation.CheckmkUserMngmt')
+    @patch('builtins.print')
+    def test_a_user_the_run_did_not_produce_is_marked(self, mock_print, mock_model):
+        gone = StoredUser(user_id='old', generated_by_rule='Rule')
+        mock_model.objects.return_value = [gone]
+
+        CheckmkUserGeneration.retire_users({'dba'}, set())
+
+        self.assertTrue(gone.remove_if_found)
+        self.assertEqual(gone.saved, 1)
+        # Only generated users not yet marked are looked at
+        self.assertEqual(mock_model.objects.call_args[1],
+                         {'generated_by_rule__nin': [None, ''],
+                          'remove_if_found__ne': True})
+
+    @patch('application.plugins.checkmk.user_generation.CheckmkUserMngmt')
+    @patch('builtins.print')
+    def test_a_produced_user_stays(self, mock_print, mock_model):
+        kept = StoredUser(user_id='dba', generated_by_rule='Rule')
+        mock_model.objects.return_value = [kept]
+
+        CheckmkUserGeneration.retire_users({'dba'}, set())
+
+        self.assertFalse(kept.remove_if_found)
+        self.assertEqual(kept.saved, 0)
+
+    @patch('application.plugins.checkmk.user_generation.CheckmkUserMngmt')
+    @patch('builtins.print')
+    def test_users_of_a_failed_lookup_stay(self, mock_print, mock_model):
+        unknown = StoredUser(user_id='dba', generated_by_rule='A')
+        mock_model.objects.return_value = [unknown]
+
+        CheckmkUserGeneration.retire_users(set(), {'A'})
+
+        self.assertFalse(unknown.remove_if_found)
+        self.assertEqual(unknown.saved, 0)
+
+    @patch('application.plugins.checkmk.user_generation.CheckmkUserMngmt')
+    @patch('builtins.print')
+    def test_a_returning_group_clears_the_mark(self, mock_print, mock_model):
+        existing = StoredUser(user_id='dba', full_name='dba', email='dba@example.com',
+                              roles=['user'], contact_groups=['all'],
+                              disable_login=True, generated_by_rule='Rule',
+                              remove_if_found=True)
+        mock_model.objects.return_value.first.return_value = existing
+
+        user_id = self.syncer.sync_user(make_rule(), 'dba', {'mail': 'dba@example.com'})
+
+        self.assertEqual(user_id, 'dba')
+        self.assertFalse(existing.remove_if_found)
+        self.assertEqual(existing.saved, 1)
+
+    @patch('application.plugins.checkmk.user_generation.CheckmkUserGenerationRule')
+    @patch('application.plugins.checkmk.user_generation.collect_attribute_index')
+    @patch('application.plugins.checkmk.user_generation.Host')
+    @patch('builtins.print')
+    def test_the_run_hands_produced_and_failed_on(self, mock_print, mock_host,
+                                                  mock_index, mock_rules):
+        mock_index.return_value = ({'ldap_group': ['dba']}, {})
+        mock_rules.objects.return_value = [make_rule('A'),
+                                           make_rule('B', ldap_account='ldap')]
+
+        with patch.object(self.syncer, 'lookup_groups', return_value={}), \
+                patch.object(self.syncer, 'sync_user', return_value='dba'), \
+                patch.object(self.syncer, 'retire_users') as mock_retire:
+            self.syncer.generate_users()
+
+        mock_retire.assert_called_once_with({'dba'}, {'B'})

@@ -163,6 +163,10 @@ def user_fields(rule, context, user_id, current=None):
         'disable_login': bool(outcome.disable_login),
     }
     rendered = dict(wanted)
+    # A user marked for removal because its group was gone is wanted
+    # again, so the next export creates it instead of deleting it.
+    if current is not None and getattr(current, 'remove_if_found', False):
+        wanted['remove_if_found'] = False
     # A template that renders to nothing — the group has no such
     # attribute — leaves the field as it is instead of emptying it.
     for field, template in (('email', outcome.rewrite_email),
@@ -206,16 +210,42 @@ class CheckmkUserGeneration(Plugin):
         directory = self.lookup_groups(rule_groups)
 
         print(f"\n{CC.HEADER}Generate Users{CC.ENDC}")
+        generated = set()
+        failed_rules = set()
         for rule, selected in rule_groups:
             search = group_search(rule.outcome, self.override_group_filter)
             if search.account and search not in directory:
                 # The lookup failed and said so — creating the users now
                 # would leave them without their directory data.
+                failed_rules.add(rule.name)
                 continue
             groups = directory.get(search, {})
             for group in selected:
-                self.sync_user(rule, group.name, groups.get(group.name, {}),
-                               group.original)
+                user_id = self.sync_user(rule, group.name,
+                                         groups.get(group.name, {}),
+                                         group.original)
+                if user_id:
+                    generated.add(user_id)
+
+        self.retire_users(generated, failed_rules)
+
+    @staticmethod
+    def retire_users(generated, failed_rules):
+        """
+        Mark every generated user this run did not produce for removal,
+        so the next user export deletes it in Checkmk. Users of a rule
+        whose directory lookup failed stay as they are: their groups are
+        unknown, not gone. Users created by hand are never touched.
+        """
+        # pylint: disable=no-member
+        for user in CheckmkUserMngmt.objects(generated_by_rule__nin=[None, ''],
+                                             remove_if_found__ne=True):
+            if user.user_id in generated or user.generated_by_rule in failed_rules:
+                continue
+            user.remove_if_found = True
+            user.save()
+            print(f"{CC.WARNING}  * {user.user_id}: no longer found, "
+                  f"removed with the next user export{CC.ENDC}")
 
     def group_names(self, rule, attribute_index):
         """
@@ -350,6 +380,8 @@ class CheckmkUserGeneration(Plugin):
         """
         Create the Checkmk user of one group, or update the one a former
         run created. A user someone made by hand is never touched.
+
+        Returns the id of the generated user, None when there is none.
         """
         plan = self.plan_user(rule, group_name, group, original_name)
         user_id = plan['user_id']
@@ -358,10 +390,10 @@ class CheckmkUserGeneration(Plugin):
             if user_id:
                 print(f"{CC.WARNING}  * {user_id}: {plan['note']}, "
                       f"not touched{CC.ENDC}")
-            return
+            return None
         if plan['action'] == 'unchanged':
             print(f"{CC.OKGREEN}  *{CC.ENDC} {user_id}: Nothing to do")
-            return
+            return user_id
 
         user = plan['user'] or CheckmkUserMngmt(
             user_id=user_id,
@@ -373,6 +405,7 @@ class CheckmkUserGeneration(Plugin):
         user.save()
         print(f"{CC.OKGREEN}  *{CC.ENDC} {user_id}: "
               f"Saved ({', '.join(plan['changed'])})")
+        return user_id
 
     def preview(self, rule_id=None):
         """
