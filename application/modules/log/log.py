@@ -59,6 +59,29 @@ class Log():
                 struct[level] = str(detail[1])
         return details, struct, has_error
 
+    @staticmethod
+    def _emit(message, details_struct, affected_hosts, has_error):
+        """
+        Send one structured record to the log pipeline
+        """
+        # Emit a single structured record instead of one line per detail.
+        # The JSON formatter picks up `extra` and maps it to ECS fields;
+        # the default text formatter drops these cleanly.
+        level = logging.ERROR if has_error else logging.INFO
+        extra = {
+            'event_source': message['source'],
+            'event_details': details_struct,
+            'event_affected_hosts': affected_hosts,
+            'event_has_error': has_error,
+        }
+        # The traceback is stored on the log entry, so a structured sink
+        # should carry it too. Outside an except block `format_exc()`
+        # returns 'NoneType: None' — only a real one is worth shipping.
+        if message['traceback'] and not message['traceback'].startswith('NoneType'):
+            extra['event_traceback'] = message['traceback']
+        for target in (logger, syslog_logger):
+            target.log(level, message['message'], extra=extra)
+
     def _log_function(self, message):
         """
         Write entries do db
@@ -79,23 +102,7 @@ class Log():
         log_entry.traceback = message['traceback']
         log_entry.save()
 
-        # Emit a single structured record instead of one line per detail.
-        # The JSON formatter picks up `extra` and maps it to ECS fields;
-        # the default text formatter drops these cleanly.
-        level = logging.ERROR if has_error else logging.INFO
-        extra = {
-            'event_source': message['source'],
-            'event_details': details_struct,
-            'event_affected_hosts': affected_hosts,
-            'event_has_error': has_error,
-        }
-        # The traceback is stored on the log entry, so a structured sink
-        # should carry it too. Outside an except block `format_exc()`
-        # returns 'NoneType: None' — only a real one is worth shipping.
-        if message['traceback'] and not message['traceback'].startswith('NoneType'):
-            extra['event_traceback'] = message['traceback']
-        for target in (logger, syslog_logger):
-            target.log(level, message['message'], extra=extra)
+        self._emit(message, details_struct, affected_hosts, has_error)
 
         # Fan the entry into the notification dispatcher directly.
         # We do *not* go through Python logging because the syncer's
@@ -121,6 +128,17 @@ class Log():
                            'source': source,
                            'traceback': traceback.format_exc(),
                            'details': details})
+
+    def stream(self, message, source="SYSTEM", details=None):
+        """
+        Report to the log pipeline only: no entry in the Log view,
+        no notification. For routine records like a cron pass.
+        """
+        affected_hosts = []
+        _details, details_struct, has_error = self._collect_details(
+            details, affected_hosts)
+        self._emit({'message': message, 'source': source, 'traceback': None},
+                   details_struct, affected_hosts, has_error)
 
     def debug(self, message):
         """Just print it out"""
