@@ -14,6 +14,7 @@ from syncerapi.v1 import (
 )
 
 from .netbox import SyncNetbox
+from .utils import parse_import_filter
 
 
 class SyncVirtualMachines(SyncNetbox):
@@ -188,7 +189,7 @@ class SyncVirtualMachines(SyncNetbox):
         vm_filter = {}
         import_id = self.get_unique_id()
         if import_filter := self.config.get('import_filter'):
-            vm_filter  = dict([x.strip().split(':') for x in import_filter.split(',') if x])
+            vm_filter = parse_import_filter(import_filter)
         num_seen = 0
         num_errors = 0
         for vm in self.nb.virtualization.virtual_machines.filter(**vm_filter):
