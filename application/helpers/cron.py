@@ -3,7 +3,7 @@ Cron Job Managment Helper
 """
 import os
 import sys
-from application import cron_register, plugin_register
+from application import cron_first, cron_register, plugin_register
 
 # Resolved once per filename seen
 _filename_to_plugin = {}
@@ -28,19 +28,60 @@ def _plugin_dirname_for_file(filename):
     return ""
 
 
-def register_cronjob(job_name, job_function):
-    """
-    Register Cronjob to the System
+# Plugin directory each cron job was registered from, "" for none
+cron_plugin_dir = {}
 
-    Pass the Unqiue Name and the Function reference.
+
+def _caller_plugin():
+    """
+    Plugin directory of the code which called the register function and
+    whether that plugin is disabled
     """
     global _is_disabled  # pylint: disable=global-statement
     if _is_disabled is None:
         from application.helpers.plugins import is_plugin_disabled  # pylint: disable=import-outside-toplevel
         _is_disabled = is_plugin_disabled
-    caller = sys._getframe(1).f_code.co_filename  # pylint: disable=protected-access
+    caller = sys._getframe(2).f_code.co_filename  # pylint: disable=protected-access
     dirname = _plugin_dirname_for_file(caller)
-    if dirname and _is_disabled(dirname):
+    return dirname, bool(dirname and _is_disabled(dirname))
+
+
+def register_cronjob(job_name, job_function, first=False):
+    """
+    Register Cronjob to the System
+
+    Pass the Unqiue Name and the Function reference. With first, the job
+    leads the list of commands in the cron group form.
+    """
+    dirname, disabled = _caller_plugin()
+    if disabled:
         return
+    cron_plugin_dir[job_name] = dirname
+    if first:
+        cron_first.add(job_name)
     cron_register[job_name] = job_function
     plugin_register.append(job_name)
+
+
+# What the Run Import job starts, by account type:
+# {account_type: {variant: {'label', 'import', 'inventorize'}}}
+import_register = {}
+
+
+def register_import(account_type, import_function=None, inventorize_function=None,
+                    variant='', label=''):
+    """
+    Register the functions Run Import starts for accounts of the type:
+    the import for a main source, the inventorize for an additional one.
+
+    A plugin with more than one import per account type registers each
+    as a variant, the account picks one, the first registered is the
+    default.
+    """
+    if _caller_plugin()[1]:
+        return
+    import_register.setdefault(account_type, {})[variant] = {
+        'label': label or variant,
+        'import': import_function,
+        'inventorize': inventorize_function,
+    }

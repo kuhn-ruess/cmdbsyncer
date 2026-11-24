@@ -749,11 +749,11 @@ class Host(HostLabelsMixin, db.Document):
         is_object = account_dict.get('is_object', False)
         self.object_type = account_dict.get('object_type', 'auto')
 
-        if account_dict.get('restrict_to') == 'inventorize':
+        if account_dict.get('restrict_to') in ('inventorize', 'export'):
             # The account is not allowed to own hosts. Raised instead of
             # skipped so the run stops before the first host is written.
             raise HostError(f"Account {account_name} is restricted to "
-                            "inventorize and must not import hosts")
+                            f"{account_dict['restrict_to']} and must not import hosts")
 
         if account_dict.get('shadow_mode'):
             # Only importers going through update_import_host() know

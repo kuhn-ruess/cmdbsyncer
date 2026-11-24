@@ -38,14 +38,16 @@ def get_account_types():
     return account_types
 
 
-# Limit an account to one of the two directions it can be used in. An
-# account restricted to "import" must not be used to write inventory data
-# and the other way round, so a wrong CLI call or cron entry does not put
-# data on hosts the account was never meant to touch.
+# The role of an account. A main source imports hosts and must not write
+# inventory data, an additional source only inventorizes, an export
+# target does neither, so a wrong CLI call or cron entry does not put
+# data on hosts the account was never meant to touch. Run Import picks
+# import or inventorize from it. A child account has its own role.
 account_restrictions = [
-    ('', "No restriction"),
-    ('import', "Only Import"),
-    ('inventorize', "Only Inventorize"),
+    ('', "Not limited"),
+    ('import', "Main source"),
+    ('inventorize', "Additional source"),
+    ('export', "Export target"),
 ]
 
 
@@ -109,7 +111,11 @@ class Account(db.Document):
         username (str): Username for authentication.
         password (str): Plaintext password (for backward compatibility).
         password_crypted (str): Encrypted password.
-        restrict_to (str): Limit the account to 'import' or 'inventorize'.
+        restrict_to (str): Role: 'import' (main source), 'inventorize'
+            (additional source), 'export' (export target) or empty for
+            not limited.
+        import_variant (str): Which import of its plugin Run Import starts,
+            for plugins with several. Empty for the first one.
         custom_fields (list): List of custom fields (CustomEntry).
         plugin_settings (list): List of plugin settings (PluginSettings).
         enabled (bool): Whether the account is enabled.
@@ -229,6 +235,7 @@ class Account(db.Document):
 
 
     restrict_to = db.StringField(choices=account_restrictions, default='')
+    import_variant = db.StringField(default='')
 
     enabled = db.BooleanField(default=True)
 

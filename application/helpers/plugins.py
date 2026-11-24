@@ -113,6 +113,20 @@ def _plugin_data_cache():
     return _PLUGIN_DATA_CACHE
 
 
+def plugin_jobs(account_type):
+    """
+    The jobs Plugin Settings offers for accounts of the type: those of
+    its plugin directory. Jobs of single file plugins and the core have
+    no account type, and their settings are read by none.
+    """
+    # pylint: disable=import-outside-toplevel
+    from application import plugin_register
+    from application.helpers.cron import cron_plugin_dir
+    own = {entry for entry, data in _plugin_data_cache().items()
+           if data.get('ident') == account_type}
+    return [job for job in plugin_register if cron_plugin_dir.get(job) in own]
+
+
 def is_plugin_disabled(dirname):
     """Return True iff *dirname* (or its plugin.json ident) is listed in
     ``disabled_plugins.json``. Plugins are enabled by default."""

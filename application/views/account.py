@@ -10,7 +10,7 @@ from flask_login import current_user
 from flask_admin.actions import action
 from flask_admin.base import expose
 from flask_admin.form import rules
-from wtforms import StringField
+from wtforms import SelectField, StringField
 from wtforms.validators import Optional, ValidationError
 from application.models.cron import CronGroup, job_account
 from application.views.default import DefaultModelView, name_and_enabled_filters
@@ -20,7 +20,8 @@ from application.models.host import Host
 from application.models.host_templates import assignable_templates
 from application.helpers.get_account import get_account_by_name
 from application.helpers.import_hostnames import take_over_shadow_data
-from application.helpers.plugins import custom_field_help, discover_plugins
+from application.helpers.plugins import custom_field_help, discover_plugins, plugin_jobs
+from application.helpers.run_import import variant_choices, variant_problem
 from application.plugins.checkmk.models import CheckmkObjectCache  # TODO: Make Plugin Compatible
 from application.docu_links import docu_links
 
@@ -31,53 +32,34 @@ _DOCS_BADGE = rules.HTML(
 )
 
 
-def _field_help(text):
-    """
-    A visible, theme-aware help line placed right under a form field.
-
-    Flask-Admin only renders `form_descriptions` for checkboxes as a hover
-    tooltip (easy to miss, and unstyled in the custom themes), so switch
-    explanations are rendered explicitly instead.
-    """
-    return rules.HTML(
-        '<p style="margin:-8px 0 12px; font-size:0.82rem; '
-        'color:var(--surface-muted,#6c757d);">'
-        f'{escape(text)}</p>'
-    )
-
-
 # Shared switch explanations — user-facing wording, kept identical between the
 # main and child account forms where the same switch appears.
-_HELP_IS_MASTER = (
-    "Let this account take over and update hosts that another account already "
-    "imported. Normally a host belongs to the first account that imported it "
-    "and other accounts leave it untouched — a master account is allowed to "
-    "claim it."
-)
-_HELP_SHADOW_MODE = (
-    "Test a new source before it takes over: the import only stores its "
-    "labels next to the labels of hosts the syncer already has, and changes "
-    "nothing else. Compare both on the host page and in Debug Host. To switch "
-    "over, use Go Live with Shadow Data in the account list: the shadow data "
-    "becomes the labels and the account becomes master."
-)
+_HELP_IS_MASTER = "Takes over hosts another account imported first."
+_HELP_SHADOW_MODE = "Only stores labels next to the current ones, to compare."
 _HELP_IS_OBJECT = (
-    "Store what this account imports as Objects instead of Hosts. Use it for "
-    "things that are not servers — like locations, contracts or clusters. "
-    "Objects are never exported as hosts, but all of their attributes stay "
-    "available in your rules."
+    "Objects (locations, contracts, ...) are never exported as hosts. The "
+    "account decides this, not the job name."
 )
+_IMPORTS_AS_CHOICES = [('', 'Hosts'), ('1', 'Objects')]
 _HELP_RESTRICT_TO = (
-    "Allow this account to be used in one direction only. \"Only Import\" "
-    "blocks every inventorize run with this account, \"Only Inventorize\" "
-    "keeps it from importing hosts of its own — useful for an account that "
-    "should just enrich hosts another system owns."
+    "Run Import (defined by Account) follows the role. An additional source "
+    "writes under inventorize_key."
 )
-_HELP_AUTO_APPLY_TEMPLATES = (
-    "CMDB templates every object imported through this account gets. "
-    "Templates already assigned to an object stay, a template removed here "
-    "stays on the objects which have it."
-)
+_HELP_IMPORT_VARIANT = "Which import of the plugin Run Import starts."
+_HELP_VALID_HOSTNAME = "Skips names that are no valid hostname (object type Host Object)."
+_HELP_REQUIRE_FQDN = "Skips names that are no FQDN."
+
+# The roles explained in the choice itself, the model keeps the short names
+_ROLE_CHOICES = [
+    ('', "Not limited: every job allowed, Run Import imports"),
+    ('import', "Main source: imports hosts and their labels"),
+    ('inventorize', "Additional source: adds inventory to hosts of other accounts"),
+    ('export', "Export target: only exports, no import or inventorize"),
+]
+
+_SOURCE_SECTION_DESC = 'What the account delivers and how it treats hosts of others.'
+
+_HELP_AUTO_APPLY_TEMPLATES = "CMDB templates every imported entry gets."
 
 
 def _template_choices(form):
@@ -90,11 +72,141 @@ def _template_choices(form):
     return form
 
 
-_HELP_CMDB_OBJECT = (
-    "Treat this account as a source for your internal CMDB. Imported entries "
-    "automatically get your CMDB template and default fields, and are kept "
-    "even if they later disappear from the source (never auto-deleted)."
+def _variant_choices(form, account_type):
+    """Explain the roles, offer the imports of the account type in Import from"""
+    if hasattr(form, 'restrict_to'):
+        form.restrict_to.choices = _ROLE_CHOICES
+    if hasattr(form, 'is_object'):
+        form.is_object.choices = _IMPORTS_AS_CHOICES
+    if hasattr(form, 'import_variant'):
+        form.import_variant.choices = variant_choices(account_type)
+    return form
+
+
+def _check_variant(model, account_type):
+    """
+    Refuse an Import from the plugin of the account does not have, and
+    Plugin Settings for jobs of other plugins
+    """
+    if problem := variant_problem(account_type, model.import_variant):
+        raise ValidationError(problem)
+    allowed = plugin_jobs(account_type)
+    for entry in model.plugin_settings:
+        if entry.plugin not in allowed:
+            raise ValidationError(f"Plugin Settings: {entry.plugin} is no job of "
+                                  f"accounts of type {account_type}")
+
+
+class _SourceViewMixin:  # pylint: disable=too-few-public-methods
+    """What account_source_fields.html needs to offer only fitting jobs"""
+
+    @staticmethod
+    def plugin_jobs_by_type():
+        """The jobs Plugin Settings offers, by account type"""
+        return {account_type: plugin_jobs(account_type)
+                for account_type in discover_plugins()}
+
+    @staticmethod
+    def parent_types():
+        """Type of every main account, a child account has the one of its parent"""
+        return {str(account.id): account.type
+                for account in Account.objects(is_child__ne=True).only('type')}
+
+
+class _VariantCell(rules.Field):
+    """
+    The Import from field with its help as a cell next to the role, only
+    shown when the plugin has more than one import to choose from
+    """
+
+    def __call__(self, form, form_opts=None, field_args=None):
+        field = getattr(form, self.field_name, None)
+        if field is None or len(field.choices) < 2:
+            return ''
+        return (Markup('<div class="acct-cell">')
+                + super().__call__(form, form_opts, field_args)
+                + Markup(f'<p class="acct-hint">{escape(_HELP_IMPORT_VARIANT)}</p></div>'))
+
+
+_HELP_CMDB_OBJECT = "Gets the CMDB template and default fields, stays when gone from the source."
+
+
+# Layout of the Source section: pairs of fields side by side, the
+# switches as compact rows, the rarely used import settings folded away.
+# Colors only from theme variables, so all themes render it.
+_SOURCE_CSS = rules.HTML(
+    '<style>'
+    '.acct-row{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;}'
+    '.acct-row>.acct-cell:only-child{grid-column:1/-1;}'
+    '@media (max-width:700px){.acct-row{grid-template-columns:1fr;}}'
+    '.acct-check .form-group{display:flex;flex-direction:row-reverse;'
+    'justify-content:flex-end;align-items:center;gap:8px;margin-bottom:0;}'
+    '.acct-check .form-group label{margin:0;padding:0;}'
+    '.acct-hint{margin:2px 0 12px;font-size:0.82rem;'
+    'color:var(--surface-muted,#6c757d);}'
+    '.acct-more{margin:4px 0 8px;}'
+    '.acct-more>summary{cursor:pointer;color:var(--surface-muted,#6c757d);'
+    'margin-bottom:8px;}'
+    '</style>'
 )
+
+
+def _hint(text):
+    """A short help line for a field of the Source section"""
+    return rules.HTML(f'<p class="acct-hint">{escape(text)}</p>')
+
+
+def _cell(*field_rules):
+    """One grid cell of an .acct-row"""
+    return [rules.HTML('<div class="acct-cell">'), *field_rules, rules.HTML('</div>')]
+
+
+def _row(*cells):
+    """Fields side by side"""
+    return [rules.HTML('<div class="acct-row">'),
+            *[rule for cell in cells for rule in cell],
+            rules.HTML('</div>')]
+
+
+def _check(field, text):
+    """A switch with its label on the right and a short help below"""
+    return [rules.HTML('<div class="acct-cell acct-check">'),
+            rules.Field(field), _hint(text), rules.HTML('</div>')]
+
+
+def _import_fields(*field_rules):
+    """
+    The fields which only matter for an account that creates entries,
+    hidden by account_source_fields.html for the other roles
+    """
+    return [rules.HTML('<div id="account-import-fields">'),
+            *field_rules,
+            rules.HTML('</div>')]
+
+
+def _more_settings(*field_rules):
+    """Import settings most accounts leave alone, folded away"""
+    return [rules.HTML('<details class="acct-more"><summary>More import '
+                       'settings</summary>'),
+            *field_rules,
+            rules.HTML('</details>')]
+
+
+_ROLE_RULES = [
+    _SOURCE_CSS,
+    *_row(_cell(rules.Field('restrict_to'), _hint(_HELP_RESTRICT_TO)),
+          [_VariantCell('import_variant')]),
+]
+_IMPORTS_AS_RULES = [
+    *_row(_cell(rules.Field('is_object'), _hint(_HELP_IS_OBJECT)),
+          _cell(rules.Field('object_type'))),
+]
+_TEMPLATE_AND_NAME_RULES = [
+    rules.Field('auto_apply_templates'),
+    _hint(_HELP_AUTO_APPLY_TEMPLATES),
+    *_row(_check('check_for_valid_hostname', _HELP_VALID_HOSTNAME),
+          _check('require_fqdn', _HELP_REQUIRE_FQDN)),
+]
 
 class _PasswordField(StringField):
     """
@@ -162,7 +274,7 @@ def _render_type(_view, _context, model, _name):
     return Markup(f'<span class="account-type" data-type="{escape(value)}" '
                   f'data-label="{escape(labels.get(value, value))}">{escape(value)}</span>')
 
-class ChildAccountModelView(DefaultModelView):
+class ChildAccountModelView(_SourceViewMixin, DefaultModelView):
     """
     Child Account Model
     """
@@ -181,13 +293,17 @@ class ChildAccountModelView(DefaultModelView):
 
     column_labels = {
         'require_fqdn': 'Require FQDN',
-        'restrict_to': 'Restrict to',
+        'restrict_to': 'Role',
+        'import_variant': 'Import from',
         'auto_apply_templates': 'Auto Apply Templates',
     }
 
     form_args = {
         'require_fqdn': {'label': 'Require FQDN'},
-        'restrict_to': {'label': 'Restrict to'},
+        'restrict_to': {'label': 'Role'},
+        'import_variant': {'label': 'Import from', 'validate_choice': False},
+        'is_object': {'label': 'Imports as', 'coerce': bool},
+        'object_type': {'label': 'Object type'},
         'auto_apply_templates': {'label': 'Auto Apply Templates',
                                  'validators': [Optional()]},
     }
@@ -199,19 +315,11 @@ class ChildAccountModelView(DefaultModelView):
                     'Name, parent account and activation.',
                     [rules.Field('name'),
                      rules.Field('parent'),
-                     rules.Field('enabled'),
-                     rules.Field('restrict_to'),
-                     _field_help(_HELP_RESTRICT_TO)]),
-            section('2', 'cond', 'Object Settings',
-                    'Which object types this child account covers and its '
-                    'import name checks.',
-                    [rules.Field('is_object'),
-                     _field_help(_HELP_IS_OBJECT),
-                     rules.Field('object_type'),
-                     rules.Field('auto_apply_templates'),
-                     _field_help(_HELP_AUTO_APPLY_TEMPLATES),
-                     rules.Field('check_for_valid_hostname'),
-                     rules.Field('require_fqdn')]),
+                     rules.Field('enabled')]),
+            section('2', 'cond', 'Source', _SOURCE_SECTION_DESC,
+                    [*_ROLE_RULES,
+                     *_import_fields(*_IMPORTS_AS_RULES,
+                                     *_more_settings(*_TEMPLATE_AND_NAME_RULES))]),
             section('3', 'out', 'Additional Configuration',
                     'Freeform custom fields and per-plugin settings.',
                     [rules.Field('custom_fields'),
@@ -220,26 +328,36 @@ class ChildAccountModelView(DefaultModelView):
     ]
 
 
+    form_overrides = {
+        'import_variant': SelectField,
+        'is_object': SelectField,
+    }
+
+    edit_template = 'admin/account_child_edit.html'
+    create_template = 'admin/account_child_create.html'
+
     def create_form(self, obj=None):
         """Offer only CMDB templates to apply"""
-        return _template_choices(super().create_form(obj))
+        return _variant_choices(_template_choices(super().create_form(obj)), None)
 
     def edit_form(self, obj=None):
-        """Offer only CMDB templates to apply"""
-        return _template_choices(super().edit_form(obj))
+        """Offer only CMDB templates to apply, the imports of the parent"""
+        parent_type = obj.parent.type if obj and obj.parent else None
+        return _variant_choices(_template_choices(super().edit_form(obj)), parent_type)
 
     def on_model_change(self, form, model, is_created):
         """
         On Save Operations
         """
         model.is_child = True
+        _check_variant(model, model.parent.type if model.parent else None)
         return super().on_model_change(form, model, is_created)
 
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('account')
 
-class AccountModelView(DefaultModelView):
+class AccountModelView(_SourceViewMixin, DefaultModelView):
     """
     Account Model
     """
@@ -253,7 +371,7 @@ class AccountModelView(DefaultModelView):
     column_filters = name_and_enabled_filters()
 
     column_exclude_list = ['custom_fields', 'is_child', 'parent', 'password_crypted',
-                           'auto_apply_templates']
+                           'auto_apply_templates', 'import_variant']
 
     # The custom fields are name/value pairs, so what they configure is
     # invisible in the form. These templates add the help of a field
@@ -299,34 +417,27 @@ class AccountModelView(DefaultModelView):
                     'Name, plugin type and activation.',
                     [rules.Field('name'),
                      rules.Field('type'),
-                     rules.Field('is_master'),
-                     _field_help(_HELP_IS_MASTER),
-                     rules.Field('shadow_mode'),
-                     _field_help(_HELP_SHADOW_MODE),
-                     rules.Field('enabled'),
-                     rules.Field('restrict_to'),
-                     _field_help(_HELP_RESTRICT_TO)]),
-            section('2', 'cond', 'Access',
+                     rules.Field('enabled')]),
+            section('2', 'cond', 'Source', _SOURCE_SECTION_DESC,
+                    [*_ROLE_RULES,
+                     *_import_fields(
+                         *_IMPORTS_AS_RULES,
+                         *_row(_check('is_master', _HELP_IS_MASTER),
+                               _check('shadow_mode', _HELP_SHADOW_MODE)),
+                         *_more_settings(
+                             rules.HTML('<div id="account-cmdb-object">'),
+                             *_check('cmdb_object', _HELP_CMDB_OBJECT),
+                             rules.HTML('</div>'),
+                             *_TEMPLATE_AND_NAME_RULES))]),
+            section('3', 'aux', 'Access',
                     'How the syncer connects to this system.',
                     [rules.Field('address'),
                      rules.Field('username'),
                      rules.Field('password')]),
-            section('3', 'out', 'Additional Configuration',
+            section('4', 'out', 'Additional Configuration',
                     'Freeform custom fields and per-plugin overrides.',
                     [rules.Field('custom_fields'),
                      rules.Field('plugin_settings')]),
-            section('4', 'aux', 'Object Settings',
-                    'Which object types this account produces or targets and '
-                    'its import name checks.',
-                    [rules.Field('is_object'),
-                     _field_help(_HELP_IS_OBJECT),
-                     rules.Field('cmdb_object'),
-                     _field_help(_HELP_CMDB_OBJECT),
-                     rules.Field('object_type'),
-                     rules.Field('auto_apply_templates'),
-                     _field_help(_HELP_AUTO_APPLY_TEMPLATES),
-                     rules.Field('check_for_valid_hostname'),
-                     rules.Field('require_fqdn')]),
         ),
     ]
 
@@ -336,7 +447,8 @@ class AccountModelView(DefaultModelView):
         'password': 'Attributes',
         'require_fqdn': 'Require FQDN',
         'cmdb_object': 'CMDB object',
-        'restrict_to': 'Restrict to',
+        'restrict_to': 'Role',
+        'import_variant': 'Import from',
         'shadow_mode': 'Shadow source',
         'auto_apply_templates': 'Auto Apply Templates',
     }
@@ -344,7 +456,10 @@ class AccountModelView(DefaultModelView):
     form_args = {
         'require_fqdn': {'label': 'Require FQDN'},
         'cmdb_object': {'label': 'CMDB object'},
-        'restrict_to': {'label': 'Restrict to'},
+        'restrict_to': {'label': 'Role'},
+        'import_variant': {'label': 'Import from', 'validate_choice': False},
+        'is_object': {'label': 'Imports as', 'coerce': bool},
+        'object_type': {'label': 'Object type'},
         'shadow_mode': {'label': 'Shadow source'},
         'auto_apply_templates': {'label': 'Auto Apply Templates',
                                  'validators': [Optional()]},
@@ -399,6 +514,8 @@ class AccountModelView(DefaultModelView):
         'password': _PasswordField,
         'address': StringField,
         'username': StringField,
+        'import_variant': SelectField,
+        'is_object': SelectField,
     }
 
     form_widget_args = {
@@ -470,6 +587,7 @@ class AccountModelView(DefaultModelView):
         semantics at the plugin layer.
         """
         form = _template_choices(super().edit_form(obj))
+        _variant_choices(form, obj.type if obj else None)
         if hasattr(form, 'type'):
             self._lock_type_field(form)
         return form
@@ -486,6 +604,10 @@ class AccountModelView(DefaultModelView):
         form = _template_choices(super().create_form(obj))
 
         account_type = (request.args.get('type') or '').strip()
+        _variant_choices(form, account_type or None)
+        if hasattr(form, 'object_type') and not form.object_type.data:
+            # A new account imports hosts, of the object type Host Object
+            form.object_type.data = 'host'
         if not account_type:
             return form
 
@@ -533,6 +655,7 @@ class AccountModelView(DefaultModelView):
         # is already on the model so the preset lookup (and every field
         # below) targets the original plugin type.
         account_type = form.type.data or model.type
+        _check_variant(model, account_type)
         main_presets = []
         default_fields = []
         plugins = discover_plugins()

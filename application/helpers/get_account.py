@@ -176,6 +176,9 @@ def _build_account_dict(name, is_id):
     if not child_data.get('auto_apply_templates'):
         # No own templates: the child applies the ones of its parent
         child_data.pop('auto_apply_templates', None)
+    if not child_data.get('import_variant'):
+        # No own variant: the child imports what its parent imports
+        child_data.pop('import_variant', None)
     child_data['is_child'] = True
     parent_data = _cached_account(account.parent.id, is_id=True)
     parent_data.update(child_data)

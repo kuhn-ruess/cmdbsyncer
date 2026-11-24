@@ -9,7 +9,7 @@ import click
 from mongoengine.errors import DoesNotExist
 from application import log
 from .cmk2 import cli_cmk, CmkException
-from application.helpers.cron import register_cronjob
+from application.helpers.cron import register_cronjob, register_import
 from application.helpers.task_status import task_failed
 from application.modules.debug import ColorCodes, attribute_table
 from application.models.host_templates import active_templates
@@ -1079,3 +1079,5 @@ connect_signals()
 register_cronjob('Checkmk: Import Sites', import_sites)
 register_cronjob('Checkmk: Sync Folder Pools', sync_folderpools)
 register_cronjob('Checkmk: Sync Site Pools', sync_sitepools)
+register_import('cmkv2', import_function=import_hosts,
+                inventorize_function=inventorize_hosts)

@@ -2,7 +2,7 @@
 import click
 from application import app
 from application.helpers.plugins import register_cli_group
-from syncerapi.v1 import register_cronjob
+from syncerapi.v1 import register_cronjob, register_import
 
 from .yml import (
     import_hosts_yml,
@@ -53,3 +53,9 @@ register_cronjob('YML FILE: Import Hosts', import_hosts_yml)
 register_cronjob('YML HTTP: Import Hosts', import_hosts_rest)
 register_cronjob('YML HTTP: Inventorize Objects', inventorize_hosts_rest)
 register_cronjob('YML FILE: Inventorize Objects', inventorize_hosts_file)
+register_import('yml', import_function=import_hosts_yml,
+                inventorize_function=inventorize_hosts_file,
+                variant='file', label='File')
+register_import('yml', import_function=import_hosts_rest,
+                inventorize_function=inventorize_hosts_rest,
+                variant='http', label='HTTP')

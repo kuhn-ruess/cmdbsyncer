@@ -6,6 +6,7 @@ from application.plugins.pyodbc import ODBC
 
 from syncerapi.v1 import (
     register_cronjob,
+    register_import,
 )
 
 cli_mssql = register_cli_group(app, 'mssql', 'mssql',
@@ -51,3 +52,5 @@ def cli_mssql_inventorize(account, debug):
 register_cronjob("MsSQL: Import Hosts", mssql_import)
 register_cronjob("MsSQL: Inventorize Data", mssql_inventorize)
 #.
+register_import('mssql', import_function=mssql_import,
+                inventorize_function=mssql_inventorize)

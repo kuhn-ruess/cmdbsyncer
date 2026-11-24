@@ -8,6 +8,7 @@ from application.helpers.plugins import register_cli_group
 
 from syncerapi.v1 import (
     register_cronjob,
+    register_import,
 )
 
 from .models import (
@@ -177,3 +178,7 @@ register_cronjob("VMware: Export Custom Attributes", custom_attributes_export)
 register_cronjob("VMware: Inventorize Custom Attributes", custom_attributes_inventorize)
 register_cronjob("VMware: Inventorize VM Hardware", vm_hardware_inventorize)
 #.
+register_import('vmware_vcenter', inventorize_function=custom_attributes_inventorize,
+                variant='custom_attributes', label='Custom Attributes')
+register_import('vmware_vcenter', inventorize_function=vm_hardware_inventorize,
+                variant='vm_hardware', label='VM Hardware')

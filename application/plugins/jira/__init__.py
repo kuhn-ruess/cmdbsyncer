@@ -1,7 +1,7 @@
 """Jira On-Premise plugin."""
 import click
 from application import app
-from application.helpers.cron import register_cronjob
+from application.helpers.cron import register_cronjob, register_import
 from application.helpers.plugins import register_cli_group
 
 from .jira import import_jira
@@ -17,3 +17,4 @@ def cmd_import_jira(account):
     import_jira(account)
 
 register_cronjob('Jira OnPrem: Import  Hosts', import_jira)
+register_import('jira', import_function=import_jira)

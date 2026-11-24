@@ -1,7 +1,7 @@
 """CSV plugin."""
 import click
 from application import app
-from application.helpers.cron import register_cronjob
+from application.helpers.cron import register_cronjob, register_import
 from application.helpers.plugins import register_cli_group
 
 from .csv import CSV
@@ -157,3 +157,5 @@ def cli_compare_hosts(csv_path, delimiter, hostname_field, label_filter):
     """
     csv = CSV()
     csv.compare_hosts(csv_path, delimiter, hostname_field, label_filter)
+register_import('csv', import_function=import_hosts,
+                inventorize_function=inventorize_hosts)

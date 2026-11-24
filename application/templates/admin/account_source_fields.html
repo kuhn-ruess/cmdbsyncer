@@ -1,0 +1,81 @@
+{#
+  The Source section of the account forms: the fields which only matter
+  for an account that creates entries are hidden for an additional
+  source and an export target, CMDB object only shows for objects, the
+  folded import settings open when one of them is set.
+  Hidden fields are still sent, so switching back loses nothing.
+#}
+<script>
+    (function () {
+        var role = document.getElementById('restrict_to');
+        var importsAs = document.getElementById('is_object');
+        var importBlock = document.getElementById('account-import-fields');
+        var cmdbBlock = document.getElementById('account-cmdb-object');
+
+        function update() {
+            if (importBlock && role) {
+                var creates = role.value !== 'inventorize' && role.value !== 'export';
+                importBlock.style.display = creates ? '' : 'none';
+            }
+            if (cmdbBlock && importsAs) {
+                cmdbBlock.style.display = importsAs.value === '1' ? '' : 'none';
+            }
+        }
+
+        // The folded settings open when one of them is set
+        var more = document.querySelector('details.acct-more');
+        if (more) {
+            var multi = more.querySelector('select[multiple]');
+            if (more.querySelector('input[type=checkbox]:checked')
+                    || (multi && multi.selectedOptions.length)) {
+                more.open = true;
+            }
+        }
+
+        // Hosts are of the object type Host Object
+        var objectType = document.getElementById('object_type');
+        function hostsType() {
+            if (importsAs && objectType && !importsAs.value) {
+                objectType.value = 'host';
+                objectType.dispatchEvent(new Event('change'));
+            }
+        }
+        if (importsAs) { importsAs.addEventListener('change', hostsType); }
+
+        // Plugin Settings only offers the jobs of the plugin of the account
+        var pluginJobs = {{ admin_view.plugin_jobs_by_type() | tojson }};
+        var parentTypes = {{ admin_view.parent_types() | tojson }};
+        function accountType() {
+            var type = document.getElementById('type');
+            if (type && type.value) { return type.value; }
+            var parent = document.getElementById('parent');
+            return parent ? parentTypes[parent.value] : null;
+        }
+        function filterPluginJobs() {
+            var allowed = pluginJobs[accountType()];
+            if (!allowed) { return; }
+            document.querySelectorAll('select[id^="plugin_settings-"][id$="-plugin"]')
+                .forEach(function (select) {
+                    Array.prototype.slice.call(select.options).forEach(function (option) {
+                        if (option.value && !option.selected
+                                && allowed.indexOf(option.value) < 0) {
+                            option.remove();
+                        }
+                    });
+                });
+        }
+        filterPluginJobs();
+        // New rows of Plugin Settings are added by script
+        var form = document.querySelector('form.admin-form') || document.querySelector('form');
+        if (form && window.MutationObserver) {
+            new MutationObserver(filterPluginJobs).observe(form, {childList: true, subtree: true});
+        }
+
+        [role, importsAs].forEach(function (field) {
+            if (field) { field.addEventListener('change', update); }
+        });
+        // Select2 only triggers the jQuery change event
+        if (window.jQuery) { window.jQuery('#restrict_to, #is_object').on('change', update); }
+        update();
+    })();
+</script>

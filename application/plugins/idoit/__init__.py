@@ -9,7 +9,7 @@ from application import app
 from application.modules.rule.rewrite import Rewrite
 from application.modules.debug import ColorCodes, attribute_table
 from application.models.host import Host
-from application.helpers.cron import register_cronjob
+from application.helpers.cron import register_cronjob, register_import
 from application.helpers.plugins import register_cli_group
 
 from .models import IdoitCustomAttributes, IdoitRewriteAttributeRule
@@ -179,3 +179,4 @@ def idoit_host_debug(hostname):
 
 register_cronjob('i-doit: Import hosts', import_hosts)
 register_cronjob('i-doit: Export hosts', export_hosts)
+register_import('i-doit', import_function=import_hosts)

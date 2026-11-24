@@ -521,7 +521,10 @@ if not CLI_MODE:
 
 
 
-cron_register = SortedDict()
+# Jobs registered with first=True lead the command list, the rest is
+# sorted by name
+cron_first = set()
+cron_register = SortedDict(lambda name: (name not in cron_first, name))
 plugin_register = []
 
 # All module-level names the enterprise package might transitively reach

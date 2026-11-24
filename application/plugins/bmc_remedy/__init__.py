@@ -5,6 +5,7 @@ from application.helpers.plugins import register_cli_group
 
 from syncerapi.v1 import (
     register_cronjob,
+    register_import,
 )
 
 from .bmc_remedy import get_hosts
@@ -19,3 +20,4 @@ def cli_get_hosts(account):
 
 
 register_cronjob("BMC Remedy: Get Hosts", get_hosts)
+register_import('bmc_remedy', import_function=get_hosts)

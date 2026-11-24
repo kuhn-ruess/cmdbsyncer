@@ -2,7 +2,7 @@
 import click
 
 from application import app
-from application.helpers.cron import register_cronjob
+from application.helpers.cron import register_cronjob, register_import
 from application.helpers.plugins import register_cli_group
 
 from .mysql import mysql_import, mysql_inventorize
@@ -31,3 +31,5 @@ def cli_inventorize_hosts(account):
 
 register_cronjob("Mysql: Import Hosts", mysql_import)
 register_cronjob("Mysql: Inventorize Hosts", mysql_inventorize)
+register_import('mysql', import_function=mysql_import,
+                inventorize_function=mysql_inventorize)

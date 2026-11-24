@@ -3,7 +3,7 @@ import click
 from application import app
 from application.helpers.plugins import register_cli_group
 
-from syncerapi.v1 import register_cronjob
+from syncerapi.v1 import register_cronjob, register_import
 
 from .op5 import inventorize_op5, import_op5
 
@@ -40,3 +40,5 @@ def cmd_inventorize_op5(account, debug):
         print(f"Error: {error}")
 
 register_cronjob('OP5 Monitor: Inventorize Hosts', inventorize_op5)
+register_import('op5', import_function=import_op5,
+                inventorize_function=inventorize_op5)

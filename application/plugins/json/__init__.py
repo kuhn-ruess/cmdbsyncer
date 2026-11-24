@@ -1,7 +1,7 @@
 """JSON import plugin."""
 import click
 from application import app
-from application.helpers.cron import register_cronjob
+from application.helpers.cron import register_cronjob, register_import
 from application.helpers.plugins import register_cli_group
 
 from .json import import_hosts_json
@@ -19,3 +19,4 @@ def import_hosts(account, debug):
 
 
 register_cronjob('JSON FILE: Import Hosts', import_hosts_json)
+register_import('json', import_function=import_hosts_json)

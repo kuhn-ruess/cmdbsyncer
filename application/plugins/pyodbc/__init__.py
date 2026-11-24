@@ -6,6 +6,7 @@ from application.helpers.plugins import register_cli_group
 
 from syncerapi.v1 import (
     register_cronjob,
+    register_import,
 )
 
 from .pyodbc import ODBC
@@ -50,3 +51,5 @@ def cli_odbc_inventorize(account, debug):
 
 register_cronjob("ODBC: Import Hosts", odbc_import)
 register_cronjob("ODBC: Inventorize Data", odbc_inventorize)
+register_import('odbc', import_function=odbc_import,
+                inventorize_function=odbc_inventorize)

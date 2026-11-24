@@ -10,6 +10,7 @@ from application.modules.rule.rewrite import Rewrite
 
 from syncerapi.v1 import (
     register_cronjob,
+    register_import,
 )
 
 from .jira_cloud import import_jira_cloud
@@ -127,3 +128,4 @@ def get_jira_cloud_debug_data(hostname):
 register_cronjob('Jira Cloud: Import Hosts', import_jira_cloud)
 register_cronjob('Jira Cloud: Export Objects', export_jira_cloud)
 register_cronjob('Jira Cloud: Sync Schema', sync_jira_schema)
+register_import('jira_cloud', import_function=import_jira_cloud)

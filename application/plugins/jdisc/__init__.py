@@ -7,6 +7,7 @@ from application.helpers.plugins import register_cli_group
 
 from syncerapi.v1 import (
     register_cronjob,
+    register_import,
 )
 
 from .devices import JdiscDevices
@@ -161,3 +162,12 @@ def cli_jdisc_executables_import(account, debug):
 register_cronjob("JDisc: Inventorize Executables", jdisc_executables_inventorize)
 register_cronjob("JDisc: Import Executables", jdisc_executables_import)
 #.
+register_import('jdisc', import_function=jdisc_device_import,
+                inventorize_function=jdisc_device_inventorize,
+                variant='devices', label='Devices')
+register_import('jdisc', import_function=jdisc_applications_import,
+                inventorize_function=jdisc_application_inventorize,
+                variant='applications', label='Applications')
+register_import('jdisc', import_function=jdisc_executables_import,
+                inventorize_function=jdisc_executables_inventorize,
+                variant='executables', label='Executables')

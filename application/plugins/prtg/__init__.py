@@ -3,7 +3,7 @@ import click
 from application import app
 from application.helpers.plugins import register_cli_group
 
-from syncerapi.v1 import register_cronjob
+from syncerapi.v1 import register_cronjob, register_import
 
 from .prtg import inventorize_prtg, import_prtg
 
@@ -40,3 +40,5 @@ def cmd_import_prtg(account, debug):
         print(f"Error: {error}")
 
 register_cronjob('PRTG Monitoring: Import Objects', import_prtg)
+register_import('prtg', import_function=import_prtg,
+                inventorize_function=inventorize_prtg)

@@ -46,6 +46,10 @@ def _load(name, relative_path):
 _stub_module('application.helpers.sates', add_changes=lambda num=1: None)
 _stub_module('application.models.user', is_readonly=lambda user: False)
 _stub_module('application._version', __version__='1.2.3')
+_stub_module('application.helpers.run_import', RUN_IMPORT_JOB='Run Import',
+             RunImportError=ValueError, account_import_settings=dict,
+             creates=str, is_import_job=lambda command: False,
+             import_function=lambda settings: None)
 
 _cron_model = _load('application.models.cron', 'application/models/cron.py')
 _cron_view = _load('application.views.cron', 'application/views/cron.py')

@@ -5,7 +5,7 @@ ServiceNow Import
 import click
 
 from application import app
-from application.helpers.cron import register_cronjob
+from application.helpers.cron import register_cronjob, register_import
 from application.helpers.plugins import register_cli_group
 
 from .syncer import SyncServiceNow
@@ -58,3 +58,5 @@ def cli_inventorize_data(account, debug):
 
 register_cronjob('ServiceNow: Import hosts', import_hosts)
 register_cronjob('ServiceNow: Inventorize data', inventorize_data)
+register_import('servicenow', import_function=import_hosts,
+                inventorize_function=inventorize_data)

@@ -1,7 +1,7 @@
 """REST API plugin."""
 import click
 from application import app
-from application.helpers.cron import register_cronjob
+from application.helpers.cron import register_cronjob, register_import
 from application.helpers.plugins import register_cli_group
 
 from .rest import import_hosts_rest, inventorize_hosts_rest
@@ -29,3 +29,5 @@ def cli_inventorize_hosts_rest(account, debug):
 
 register_cronjob('REST API: Import Objects', import_hosts_rest)
 register_cronjob('REST API: Inventorize Objects', inventorize_hosts_rest)
+register_import('external_restapi', import_function=import_hosts_rest,
+                inventorize_function=inventorize_hosts_rest)

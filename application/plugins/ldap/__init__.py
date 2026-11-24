@@ -3,7 +3,7 @@ import click
 
 from application import app
 from application.helpers.inventory import run_inventory
-from application.helpers.cron import register_cronjob
+from application.helpers.cron import register_cronjob, register_import
 from application.helpers.get_account import get_account_by_name
 from application.helpers.plugins import register_cli_group
 
@@ -54,3 +54,5 @@ def cli_ldap_inventorize(account, debug):
 
 register_cronjob("LDAP: Inventorize Data", ldap_inventorize)
 register_cronjob("LDAP: Import Objects", ldap_import)
+register_import('ldap', import_function=ldap_import,
+                inventorize_function=ldap_inventorize)

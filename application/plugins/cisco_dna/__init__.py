@@ -6,7 +6,7 @@ Cisco DNA Inventory
 import click
 from application import app
 from application.helpers.get_account import get_account_by_name
-from application.helpers.cron import register_cronjob
+from application.helpers.cron import register_cronjob, register_import
 from application.helpers.plugins import register_cli_group
 from application.modules.debug import ColorCodes
 
@@ -59,3 +59,7 @@ def cli_get_interfaces(account):
 
 register_cronjob("Cisco DNA: Get Devices", get_hosts)
 register_cronjob("Cisco DNA: Get Interfaces", get_interfaces)
+register_import('cisco_dna', import_function=get_hosts,
+                variant='devices', label='Devices')
+register_import('cisco_dna', import_function=get_interfaces,
+                variant='interfaces', label='Interfaces')
