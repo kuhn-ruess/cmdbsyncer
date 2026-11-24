@@ -5,6 +5,7 @@ Account Model View
 from flask import flash, redirect, request, url_for
 from markupsafe import Markup, escape
 from mongoengine.errors import OperationError
+from mongoengine.errors import ValidationError as ModelValidationError
 from flask_login import current_user
 from flask_admin.actions import action
 from flask_admin.base import expose
@@ -17,6 +18,8 @@ from application.views._form_sections import modern_form, section
 from application.models.account import CustomEntry, Account
 from application.models.host import Host
 from application.models.host_templates import assignable_templates
+from application.helpers.get_account import get_account_by_name
+from application.helpers.import_hostnames import take_over_shadow_data
 from application.helpers.plugins import custom_field_help, discover_plugins
 from application.plugins.checkmk.models import CheckmkObjectCache  # TODO: Make Plugin Compatible
 from application.docu_links import docu_links
@@ -55,8 +58,8 @@ _HELP_SHADOW_MODE = (
     "Test a new source before it takes over: the import only stores its "
     "labels next to the labels of hosts the syncer already has, and changes "
     "nothing else. Compare both on the host page and in Debug Host. To switch "
-    "over, turn this off and make the account master, then clear the shadow "
-    "data from the account list."
+    "over, use Go Live with Shadow Data in the account list: the shadow data "
+    "becomes the labels and the account becomes master."
 )
 _HELP_IS_OBJECT = (
     "Store what this account imports as Objects instead of Hosts. Use it for "
@@ -355,6 +358,34 @@ class AccountModelView(DefaultModelView):
         names = [account.name for account in Account.objects(id__in=ids)]
         cleared = Host.clear_shadow_data(shadow_account_name__in=names)
         flash(f'Shadow source data removed from {cleared} host(s).', 'success')
+        return redirect(request.referrer or url_for('.index_view'))
+
+    @action('take_over_shadow', 'Go Live with Shadow Data',
+            'Replace the labels of the hosts with the shadow data these '
+            'accounts delivered? The accounts stop being shadow sources and '
+            'become master, so they own the hosts from now on.')
+    def action_take_over_shadow(self, ids):
+        """Make the shadow data of the selected accounts the live labels."""
+        for account in Account.objects(id__in=ids):
+            if not Host.objects(shadow_account_name=account.name).count():
+                flash(f'{account.name}: no shadow data to go live with.', 'warning')
+                continue
+            if not account.enabled:
+                flash(f'{account.name}: the account is disabled.', 'danger')
+                continue
+            account.shadow_mode = False
+            account.is_master = True
+            try:
+                account.save()
+            except ModelValidationError as error:
+                flash(f'{account.name}: {error}', 'danger')
+                continue
+            taken, refused = take_over_shadow_data(get_account_by_name(account.name))
+            message = (f'{account.name}: shadow data of {taken} host(s) is live, '
+                       'the account is master now.')
+            if refused:
+                message += f' {refused} host(s) refused it and keep their shadow data.'
+            flash(message, 'warning' if refused else 'success')
         return redirect(request.referrer or url_for('.index_view'))
 
     column_formatters = {

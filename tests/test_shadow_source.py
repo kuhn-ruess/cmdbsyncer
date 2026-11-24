@@ -3,9 +3,10 @@ Shadow source accounts: an import that only stores its labels next to
 the live ones, and debug runs that evaluate the rules with them.
 """
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
-from application.helpers.import_hostnames import update_import_host
+from application.helpers import import_hostnames
+from application.helpers.import_hostnames import take_over_shadow_data, update_import_host
 from application.helpers.shadow_data import (shadow_diff, shadow_view,
                                              shadow_view_active)
 from application.modules.plugin import Plugin
@@ -38,6 +39,45 @@ class UpdateImportHostShadowTest(unittest.TestCase):
         update_import_host(host, {'a': 1}, {'name': 'old', 'shadow_mode': False})
         host.update_shadow.assert_not_called()
         host.update_host.assert_called_once_with({'a': 1})
+
+
+class TakeOverShadowDataTest(unittest.TestCase):
+    """Going live with the shadow data of an account"""
+
+    @staticmethod
+    def _run(hosts):
+        model = Mock()
+        model.objects.return_value = hosts
+        with patch.object(import_hostnames, 'Host', model):
+            result = take_over_shadow_data({'name': 'new_cmdb', 'is_master': True})
+        return result, model
+
+    @staticmethod
+    def _host(claimed=True):
+        host = Mock()
+        host.shadow_labels = {'site': 'Frankfurt'}
+        host.set_account.return_value = claimed
+        return host
+
+    def test_the_shadow_data_becomes_the_labels(self):
+        """Labels replaced, host claimed and saved, shadow data removed"""
+        host = self._host()
+        (taken, refused), model = self._run([host])
+        self.assertEqual((taken, refused), (1, 0))
+        model.objects.assert_called_once_with(shadow_account_name='new_cmdb')
+        host.update_host.assert_called_once_with({'site': 'Frankfurt'})
+        host.set_account.assert_called_once_with(
+            account_dict={'name': 'new_cmdb', 'is_master': True})
+        host.save.assert_called_once_with()
+        model.clear_shadow_data.assert_called_once_with(pk=host.pk)
+
+    def test_a_refused_host_keeps_everything(self):
+        """A host the account may not claim is neither saved nor cleared"""
+        host = self._host(claimed=False)
+        (taken, refused), model = self._run([host, self._host()])
+        self.assertEqual((taken, refused), (1, 1))
+        host.save.assert_not_called()
+        self.assertEqual(model.clear_shadow_data.call_count, 1)
 
 
 class ShadowViewTest(unittest.TestCase):

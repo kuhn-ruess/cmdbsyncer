@@ -163,3 +163,28 @@ def update_import_host(host_obj, labels, config, **kwargs):
         host_obj.save()
         return True
     return False
+
+
+def take_over_shadow_data(config):
+    """
+    Make the shadow data the account of `config` delivered the live
+    labels of its hosts, the way its next import as owner would: labels
+    replaced, host claimed, shadow data removed. The account must no
+    longer be in shadow mode.
+
+    A host the account may not claim, like one in CMDB mode, keeps its
+    labels and its shadow data.
+
+    Returns:
+        (int, int): hosts taken over, hosts refused
+    """
+    taken = refused = 0
+    for host in Host.objects(shadow_account_name=config['name']):
+        host.update_host(host.shadow_labels)
+        if not claim_host(host, config):
+            refused += 1
+            continue
+        host.save()
+        Host.clear_shadow_data(pk=host.pk)
+        taken += 1
+    return taken, refused
