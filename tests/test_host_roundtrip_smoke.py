@@ -120,6 +120,45 @@ host.reload()
 eq(host.last_import_sync, first_sync,
    'last_import_sync after an unchanged API write')
 
+# merge_labels only adds and updates, the other labels stay.
+api('post', '/objects/api-host.example.com',
+    {'account': 'api-account', 'labels': {'os': 'bsd', 'Rack': 'r1'},
+     'merge_labels': True})
+host.reload()
+eq(host.get_labels(), {'os': 'bsd', 'Env_Name': 'prod', 'Rack': 'r1'},
+   'labels after a merging API write')
+api('post', '/objects/bulk',
+    {'account': 'api-account', 'merge_labels': True,
+     'objects': [{'hostname': 'api-host.example.com',
+                  'labels': {'os': 'linux'}}]})
+host.reload()
+eq(host.get_labels(), {'os': 'linux', 'Env_Name': 'prod', 'Rack': 'r1'},
+   'labels after a merging bulk write')
+# Without the switch the payload replaces all labels again.
+api('post', '/objects/api-host.example.com',
+    {'account': 'api-account', 'labels': {'os': 'linux', 'Env Name': 'prod'}})
+host.reload()
+eq(host.get_labels(), {'os': 'linux', 'Env_Name': 'prod'},
+   'labels after a replacing API write')
+
+# The account's rewrite_hostname applies like on an import.
+from application.models.account import CustomEntry
+Account(name='rewrite-account', type='custom', address='https://example.org',
+        custom_fields=[CustomEntry(name='rewrite_hostname',
+                                   value='{{ HOSTNAME }}.example.com')]).save()
+body = api('post', '/objects/srv01',
+           {'account': 'rewrite-account', 'labels': {'os': 'linux'}})
+eq(body['hostnames'], ['srv01.example.com'], 'names of a rewritten API write')
+if Host.objects(hostname='srv01').first():
+    fail('the API saved the name before the rewrite')
+if not Host.objects(hostname='srv01.example.com').first():
+    fail('the API did not save the rewritten name')
+api('post', '/objects/bulk',
+    {'account': 'rewrite-account',
+     'objects': [{'hostname': 'srv02', 'labels': {'os': 'linux'}}]})
+if not Host.objects(hostname='srv02.example.com').first():
+    fail('the bulk API did not save the rewritten name')
+
 # Inventory goes into its own namespace, prefixed with the section key.
 api('post', '/objects/api-host.example.com/inventory',
     {'key': 'checkmk', 'inventory': {'os name': 'Linux', 'cores': 8}})

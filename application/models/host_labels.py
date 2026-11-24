@@ -43,14 +43,18 @@ class HostLabelsMixin():
         self.labels[key] = value
         self.cache = {}
 
-    def update_host(self, labels):
+    def update_host(self, labels, merge=False):
         """
         Overwrite all Labels on Hosts,
         but checks first if needed and also sets
         set_import_sync and import_seen as needed
 
+        With merge, only the given labels are added or updated,
+        all other labels of the host stay.
         """
         label_dict = self._normalize_labels(labels)
+        if merge:
+            label_dict = {**(self.labels or {}), **label_dict}
         if self.get_labels() != label_dict:
             self.set_import_sync()
             self._set_labels(label_dict)

@@ -1043,9 +1043,9 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
         )
 
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.get_json(), {'status': 'saved'})
+        self.assertEqual(resp.get_json(), {'status': 'saved', 'hostnames': ['web01']})
         host_cls.get_host.assert_called_once_with('web01')
-        host.update_host.assert_called_once_with({'env': 'prod'})
+        host.update_host.assert_called_once_with({'env': 'prod'}, merge=False)
         host.set_account.assert_called_once()
 
     @_auth_patches
@@ -1728,8 +1728,10 @@ class ObjectsAPIScopingTest(unittest.TestCase):
 
     @_template_scoped_auth_patches(['linux'])
     @patch('application.models.host_templates.template_ids_for_names')
+    @patch('application.api.objects.get_account_by_name',
+           return_value={'name': 'acct-a'})
     @patch('application.api.objects.Host')
-    def test_post_to_a_foreign_template_host_refused(self, host_cls, ids):
+    def test_post_to_a_foreign_template_host_refused(self, host_cls, _acct, ids):
         ids.return_value = {'tpl-1'}
         host = self._host('acct-a', templates=['tpl-2'])
         host.id = 'host-1'

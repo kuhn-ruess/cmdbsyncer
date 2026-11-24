@@ -25,6 +25,7 @@ from application.models.host_templates import host_in_template_scope
 from application.plugins.checkmk.models import CheckmkFolderPool
 
 from application.helpers.get_account import get_account_by_name, AccountNotFoundError
+from application.helpers.import_hostnames import import_hostnames
 from application.helpers.mongo_keys import validate_mongo_key, validate_mongo_keys
 
 API = Namespace(
@@ -83,6 +84,11 @@ HOST = API.model('host_object', {
     'labels': fields.Raw(required=True,
                          description='Flat key/value attributes for the host. '
                                      'Empty object is valid.'),
+    'merge_labels': fields.Boolean(default=False,
+                                   description='Only add or update the given '
+                                               'labels and keep all other '
+                                               'labels of an existing host. '
+                                               'Default replaces all labels.'),
 })
 
 HOST_BULK_ITEM = API.model('host_bulk_item', {
@@ -96,6 +102,11 @@ HOST_BULK = API.model('host_bulk', {
                              description='Account that owns every host '
                                          'in this batch.'),
     'objects': fields.List(fields.Nested(HOST_BULK_ITEM), required=True),
+    'merge_labels': fields.Boolean(default=False,
+                                   description='Only add or update the given '
+                                               'labels and keep all other '
+                                               'labels of an existing host. '
+                                               'Default replaces all labels.'),
 })
 
 HOST_INVENTORY = API.model('inventory_object', {
@@ -135,6 +146,14 @@ HOST_RESPONSE = API.model('host_response', {
 
 STATUS = API.model('status', {
     'status': fields.String(example='saved'),
+})
+
+HOST_SAVE_STATUS = API.model('host_save_status', {
+    'status': fields.String(example='saved'),
+    'hostnames': fields.List(fields.String,
+                             description='Names the host was saved under, '
+                                         'after the rewrite_hostname '
+                                         'template of the account.'),
 })
 
 BULK_STATUS = API.model('bulk_status', {
@@ -219,6 +238,32 @@ def _get_import_host(hostname):
     return host_obj
 
 
+def _bulk_write_host(hostname, labels, account_dict, scope, merge):
+    """
+    Write one host of a bulk call, True when it was saved. A host that
+    is invalid, out of scope or bound to another account is skipped, so
+    one of them does not take the rest of the list along. Invalid labels
+    abort the whole call.
+    """
+    try:
+        host_obj = _get_import_host(hostname)
+    except HostError:
+        return False
+    if _write_blocked_by_scope(host_obj, scope):
+        return False
+    try:
+        host_obj.update_host(labels, merge=merge)
+    except ValueError as exc:
+        abort(400, str(exc))
+    try:
+        do_save = host_obj.set_account(account_dict=account_dict)
+    except HostError:
+        do_save = False
+    if do_save:
+        host_obj.save()
+    return do_save
+
+
 def _write_blocked_by_scope(host_obj, scope):
     """True when a restricted API user must not write to *host_obj*.
 
@@ -277,7 +322,7 @@ class HostDetailApi(Resource):
 
     @API.doc(security=['basicAuth', 'apiToken'])
     @API.expect(HOST, validate=True)
-    @API.response(200, 'Host saved.', STATUS)
+    @API.response(200, 'Host saved.', HOST_SAVE_STATUS)
     @API.response(400, 'Account unknown or label payload invalid.', ERROR)
     @API.response(401, 'Authentication failed', ERROR)
     @API.response(403, 'Host already bound to a different account.', STATUS)
@@ -298,23 +343,26 @@ class HostDetailApi(Resource):
         except AccountNotFoundError:
             abort(400, "Account not found")
         labels = req_json['labels']
-        try:
-            host_obj = _get_import_host(hostname)
-        except HostError as exc:
-            abort(400, str(exc))
-        if _write_blocked_by_scope(host_obj, scope):
-            return {'status': 'account_conflict'}, 403
-        try:
-            host_obj.update_host(labels)
-            do_save = host_obj.set_account(account_dict=account_dict)
-        except (ValueError, HostError) as exc:
-            abort(400, str(exc))
-
-        if not do_save:
-            return {'status': 'account_conflict'}, 403
-
-        host_obj.save()
-        return {'status': 'saved'}, 200
+        # The account's rewrite_hostname applies like on an import, a
+        # template rendering a list names several hosts.
+        names = import_hostnames(hostname, account_dict, labels)
+        for name in names:
+            try:
+                host_obj = _get_import_host(name)
+            except HostError as exc:
+                abort(400, str(exc))
+            if _write_blocked_by_scope(host_obj, scope):
+                return {'status': 'account_conflict'}, 403
+            try:
+                host_obj.update_host(labels,
+                                     merge=req_json.get('merge_labels', False))
+                do_save = host_obj.set_account(account_dict=account_dict)
+            except (ValueError, HostError) as exc:
+                abort(400, str(exc))
+            if not do_save:
+                return {'status': 'account_conflict'}, 403
+            host_obj.save()
+        return {'status': 'saved', 'hostnames': names}, 200
 
     @API.doc(security=['basicAuth', 'apiToken'])
     @API.response(200, 'Host deleted.', STATUS)
@@ -369,33 +417,14 @@ class HostDetailBulkApi(Resource):
             abort(400, "Account not found")
         not_save = []
         for api_host in req_json['objects']:
-            hostname = api_host['hostname']
             labels = api_host['labels']
-            try:
-                host_obj = _get_import_host(hostname)
-            except HostError:
-                not_save.append(hostname)
-                continue
-            # Skip hosts the user is not allowed to write (see
-            # _write_blocked_by_scope).
-            if _write_blocked_by_scope(host_obj, scope):
-                not_save.append(hostname)
-                continue
-            try:
-                host_obj.update_host(labels)
-            except ValueError as exc:
-                abort(400, str(exc))
-            try:
-                do_save = host_obj.set_account(account_dict=account_dict)
-            except HostError:
-                # One rejected host must not take the rest of the list along.
-                do_save = False
-
-            if do_save:
-                host_obj.save()
-                count += 1
-            else:
-                not_save.append(hostname)
+            for hostname in import_hostnames(api_host['hostname'],
+                                             account_dict, labels):
+                if _bulk_write_host(hostname, labels, account_dict, scope,
+                                    req_json.get('merge_labels', False)):
+                    count += 1
+                else:
+                    not_save.append(hostname)
 
         status = f'saved {count}'
         status_code = 200
