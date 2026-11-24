@@ -9,7 +9,10 @@ dependencies, then auto-discovers test files in:
 """
 import glob
 import os
+import re
+import subprocess
 import sys
+import time
 import unittest
 
 # Discovery paths below are relative — anchor to the script's directory so
@@ -34,20 +37,90 @@ for _venv in (".venv", "venv"):
 
 import tests  # pylint: disable=unused-import,wrong-import-position  # noqa: F401,E402 — bootstrap stubs
 
-loader = unittest.TestLoader()
-suite = unittest.TestSuite()
 
-# Core tests — use tests/ as its own top_level_dir so the bootstrapped
-# `application` stub in sys.modules isn't re-shadowed by auto-discovery.
-suite.addTests(loader.discover("tests", pattern="test*.py", top_level_dir="tests"))
+def _test_files():
+    """Every test file: tests/ and the tests/ of each plugin"""
+    return sorted(glob.glob("tests/test*.py")
+                  + glob.glob("application/plugins/*/tests/test*.py"))
 
-# Plugin tests (auto-discovered) — each plugin's tests/ is its own top_level_dir
-# for the same reason; otherwise unittest tries to import the test package under
-# its full `application.plugins.<name>.tests` dotted path and collides with the
-# stubbed `application` package.
-for test_dir in sorted(glob.glob("application/plugins/*/tests")):
-    suite.addTests(loader.discover(test_dir, pattern="test*.py", top_level_dir=test_dir))
 
-runner = unittest.TextTestRunner(verbosity=2)
-result = runner.run(suite)
-sys.exit(0 if result.wasSuccessful() else 1)
+def _suite(files):
+    """
+    The tests of the files. Each test directory is its own top_level_dir,
+    so the bootstrapped `application` stub in sys.modules isn't shadowed
+    by auto-discovery, and the plugin tests are not imported under their
+    `application.plugins.<name>.tests` path, which would collide with it.
+    """
+    loader = unittest.TestLoader()
+    suite = unittest.TestSuite()
+    for path in files:
+        test_dir = os.path.dirname(path)
+        suite.addTests(loader.discover(test_dir, pattern=os.path.basename(path),
+                                       top_level_dir=test_dir))
+    return suite
+
+
+def _run(files):
+    """Run the tests of the files in this process"""
+    result = unittest.TextTestRunner(verbosity=2).run(_suite(files))
+    return 0 if result.wasSuccessful() else 1
+
+
+def _buckets(files, jobs):
+    """Spread the files over the jobs, the largest first, by size"""
+    buckets = [[0, []] for _ in range(jobs)]
+    for path in sorted(files, key=os.path.getsize, reverse=True):
+        bucket = min(buckets, key=lambda entry: entry[0])
+        bucket[0] += os.path.getsize(path)
+        bucket[1].append(path)
+    return [entry[1] for entry in buckets if entry[1]]
+
+
+def _run_parallel(files, jobs):
+    """
+    Run the files in parallel processes. Each one gets its own interpreter,
+    the stubs of tests/__init__.py live in sys.modules. The output of a
+    process is only shown when it failed.
+    """
+    started = time.monotonic()
+    # Started all at once and waited for below, a with block per process
+    # would run them one after the other
+    processes = [
+        (subprocess.Popen(  # pylint: disable=consider-using-with
+            [sys.executable, __file__, "--files", *bucket],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True), bucket)
+        for bucket in _buckets(files, jobs)
+    ]
+    failed = False
+    count = 0
+    for process, bucket in processes:
+        output, _ = process.communicate()
+        count += sum(int(x) for x in re.findall(r"^Ran (\d+) test", output, re.M))
+        if process.returncode:
+            failed = True
+            print(output)
+            print(f"FAILED in: {', '.join(bucket)}")
+    print(f"Ran {count} tests in {time.monotonic() - started:.1f}s "
+          f"with {len(processes)} processes")
+    print("FAILED" if failed else "OK")
+    return 1 if failed else 0
+
+
+def main():
+    """
+    ./run_tests.py               all tests, in parallel processes
+    ./run_tests.py --serial      all tests in this process
+    ./run_tests.py FILE...       only these test files
+    CMDBSYNCER_TEST_JOBS=N sets the number of processes.
+    """
+    args = sys.argv[1:]
+    if args[:1] == ["--files"]:
+        return _run(args[1:])
+    files = [x for x in args if not x.startswith("--")] or _test_files()
+    jobs = int(os.environ.get("CMDBSYNCER_TEST_JOBS") or os.cpu_count() or 1)
+    if "--serial" in args or jobs < 2 or len(files) < 2:
+        return _run(files)
+    return _run_parallel(files, jobs)
+
+
+sys.exit(main())

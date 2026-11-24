@@ -197,7 +197,7 @@ class TemplateOpenChangesTest(unittest.TestCase):
              patch.object(mod, 'flash'), \
              patch.object(mod, 'redirect'), \
              patch.object(mod, 'url_for'), \
-             patch.object(mod, 'request'):
+             patch.object(mod, 'request', new=MagicMock()):
             host_cls.objects.return_value = [template]
             view_cls._bulk_set_lifecycle(view, ['id1'], 'archived')
         return add_changes
