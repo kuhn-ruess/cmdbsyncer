@@ -159,6 +159,9 @@ class CronGroup(db.Document):
 
     enabled = db.BooleanField()
     run_once_next = db.BooleanField(default=False)
+    # Account configs of REST API triggers, one run each; run_once_next
+    # is a full run and covers them
+    run_once_configs = db.ListField(field=db.DictField())
     continue_on_error = db.BooleanField(default=False)
     webhook_enabled = db.BooleanField(default=False)
     # Plaintext is shown to the operator exactly once after generate /

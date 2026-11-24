@@ -21,6 +21,7 @@ from application.api import (
 )
 from application.enterprise import run_hook as _ent_run_hook
 from application.helpers.audit import audit
+from application.helpers.get_account import protected_override_keys
 from application.modules.log.models import LogEntry
 from application.models.host import Host
 from application.models.cron import CronStats, CronGroup
@@ -86,6 +87,12 @@ CRON_UPDATE = API.model('cron_update', {
     'run_once_next': fields.Boolean(required=True,
                                     description='Set true to schedule one '
                                                 'extra run on the next pass'),
+})
+
+CRON_TRIGGER_REQUEST = API.model('cron_trigger_request', {
+    'config': fields.Raw(example={'import_filter': 'name:srv01'},
+                         description='Optional key/value pairs that add or '
+                                     'replace account config for the next run'),
 })
 
 CRON_TRIGGER_RESPONSE = API.model('cron_trigger_response', {
@@ -329,13 +336,15 @@ class SyncerCronTriggerApi(Resource):
                         'user credentials.'),
         'required': False,
     }})
+    @API.expect(CRON_TRIGGER_REQUEST, validate=False)
+    @API.doc(params={'payload': {'in': 'body', 'required': False}})
     @API.response(202, 'Run scheduled for the next cron pass.',
                   CRON_TRIGGER_RESPONSE)
     @API.response(401, 'Token mismatch or no valid credentials.', ERROR)
     @API.response(403, 'Webhook is disabled for this CronGroup.', ERROR)
     @API.response(404, 'CronGroup with that name does not exist.', ERROR)
     @API.response(409, 'CronGroup is disabled and cannot run.', ERROR)
-    def post(self, group_name):
+    def post(self, group_name):  # pylint: disable=too-many-return-statements
         """Schedule a one-off run of the named CronGroup."""
         try:
             group = CronGroup.objects.get(name=group_name)
@@ -409,12 +418,24 @@ class SyncerCronTriggerApi(Resource):
         if not group.enabled:
             return {'error': "Group disabled"}, 409
 
-        group.run_once_next = True
-        group.save()
+        body = request.get_json(silent=True)
+        config = (body.get('config') if isinstance(body, dict) else body) or {}
+        if not isinstance(config, dict):
+            return {'error': "config must be an object"}, 400
+        config = {str(key): str(value) for key, value in config.items()}
+        if protected := protected_override_keys(config):
+            return {'error': f"config can't set: {', '.join(protected)}"}, 400
+
+        # Atomic, so parallel triggers all land in the queue; the same
+        # config twice runs once
+        CronGroup.objects(id=group.id).update_one(
+            **({'add_to_set__run_once_configs': config} if config
+               else {'set__run_once_next': True}))
         log.log("Cron group triggered via webhook", source="API",
                 details=[('group', group_name),
                          ('auth', auth_method),
-                         ('ip', request.remote_addr)])
+                         ('ip', request.remote_addr),
+                         ('config', str(config))])
         audit('webhook.triggered',
               actor_type='user' if auth_method == 'user' else 'webhook',
               target_type='CronGroup', target_id=str(group.id),

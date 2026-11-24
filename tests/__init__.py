@@ -769,6 +769,9 @@ _get_account.account_allows = MagicMock(
 # Context manager used by the admin views; tests that exercise the real
 # masking load the real module themselves (see test_security_fixes).
 _get_account.mask_account_secrets = MagicMock(name="stub.mask_account_secrets")
+_get_account.account_overrides = MagicMock(name="stub.account_overrides")
+_get_account.protected_override_keys = MagicMock(
+    name="stub.protected_override_keys", return_value=[])
 
 # application.plugins.checkmk.models
 _cmk_models = _stub_package("application.plugins.checkmk.models")

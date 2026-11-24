@@ -23,6 +23,10 @@ SECRET_PLACEHOLDER = '********'
 
 _mask_secrets = ContextVar('mask_account_secrets', default=None)
 
+# Values a cron run got through the REST API trigger, as
+# (account name, {key: value}); see `account_overrides`.
+_account_overrides = ContextVar('account_overrides', default=None)
+
 
 class SecretMasking:  # pylint: disable=too-few-public-methods
     """
@@ -173,15 +177,13 @@ def _build_account_dict(name, is_id):
         # No own templates: the child applies the ones of its parent
         child_data.pop('auto_apply_templates', None)
     child_data['is_child'] = True
-    parent_data = get_account_by_name(account.parent.id, is_id=True)
+    parent_data = _cached_account(account.parent.id, is_id=True)
     parent_data.update(child_data)
     return parent_data
 
 
-def get_account_by_name(name, is_id=False):
-    """
-    Get Account by Name or Return False
-    """
+def _cached_account(name, is_id):
+    """The account dict out of the cache, built when missing or old."""
     cache_key = (str(name), is_id)
     entry = _account_cache.get(cache_key)
     if entry and time.monotonic() - entry[0] < ACCOUNT_CACHE_SECONDS:
@@ -191,6 +193,38 @@ def get_account_by_name(name, is_id=False):
         _account_cache[cache_key] = (time.monotonic(), cached)
     # Defensive copy — callers must not mutate the cached entry.
     return copy.deepcopy(cached)
+
+
+def get_account_by_name(name, is_id=False):
+    """
+    Get Account by Name or Return False
+    """
+    data = _cached_account(name, is_id)
+    overrides = _account_overrides.get()
+    if overrides and overrides[1] and overrides[0] == data.get('name'):
+        # A run for some objects only must not archive all the others
+        data['delete_host_if_not_found_on_import'] = False
+        data.update({key: _coerce_custom_value(value)
+                     for key, value in overrides[1].items()})
+    return data
+
+
+def protected_override_keys(values):
+    """Keys a cron trigger must not set: the Account fields (address,
+    credentials, ...) and the secret custom fields."""
+    protected = set(getattr(Account, '_fields')) | {'typ', '_id', 'id', 'ref', 'settings'}
+    protected.update(SECRET_ACCOUNT_FIELDS)
+    return sorted(key for key in values if key in protected)
+
+
+@contextmanager
+def account_overrides(account_name, values):
+    """Add or replace config keys of one account within the block."""
+    token = _account_overrides.set((account_name, dict(values or {})))
+    try:
+        yield
+    finally:
+        _account_overrides.reset(token)
 
 
 def get_account_variable(macro):

@@ -9,6 +9,7 @@ from mongoengine.errors import DoesNotExist
 from application import app, cron_register, log
 from application.enterprise import run_hook
 from application.helpers import crontab
+from application.helpers.get_account import account_overrides
 from application.helpers.task_status import take_task_failure
 from application.modules.debug import ColorCodes as CC
 from application.models.config import Config
@@ -25,12 +26,14 @@ def _missing_account_message(task):
             f"valid account.")
 
 
-def _run_task(task):
-    """Run one task of a group, raises when it failed."""
+def _run_task(task, config=None):
+    """Run one task of a group, raises when it failed.
+    `config` adds or replaces keys of the task's account for this run."""
     take_task_failure()
     account = job_account(task)
     if account:
-        cron_register[task.command](account=account.name)
+        with account_overrides(account.name, config):
+            cron_register[task.command](account=account.name)
     elif job_account_id(task):
         raise ValueError(_missing_account_message(task))
     else:
@@ -233,6 +236,7 @@ def jobs():  # pylint: disable=too-many-branches,too-many-statements
         now = datetime.now()
 
         force_run = False
+        run_configs = [{}]
         if not stats.next_run:
             stats.next_run = calc_next_run(job, stats.last_start)
             stats.save()
@@ -244,12 +248,15 @@ def jobs():  # pylint: disable=too-many-branches,too-many-statements
 
         next_run = stats.next_run
 
-        if job.run_once_next:
+        if job.run_once_next or job.run_once_configs:
             # Manualy trigger job just one time
             next_run = now
             force_run = True
-            job.run_once_next = False
-            job.save()
+            # Taken atomically, a trigger arriving now waits for the next pass
+            taken = CronGroup.objects(id=job.id).modify(
+                set__run_once_next=False, set__run_once_configs=[])
+            if not taken.run_once_next:
+                run_configs = taken.run_once_configs
 
         if next_run > now + timedelta(minutes=1):
             continue
@@ -272,16 +279,17 @@ def jobs():  # pylint: disable=too-many-branches,too-many-statements
 
         group_failure = False
         try:
-            for task in job.jobs:
+            for run_config, task in [(config, task) for config in run_configs
+                                     for task in job.jobs]:
                 now = datetime.now()
                 print(f"{CC.UNDERLINE}{CC.OKBLUE}Task: {task.name} {CC.ENDC}")
                 stats.last_message = \
                     f"{now}: Started Task: {task.name} (PID: {os.getpid()})"
                 stats.all_messages += \
-                    f"{now}: Started Task: {task.name} (PID: {os.getpid()})\n"
+                    f"{now}: Started Task: {task.name} {run_config or ''} (PID: {os.getpid()})\n"
                 stats.save()
                 try:
-                    _run_task(task)
+                    _run_task(task, run_config)
                 except Exception as exp:  # pylint: disable=broad-except
                     group_failure = True
                     stats.failure = True
