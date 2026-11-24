@@ -86,6 +86,38 @@ def answer_excerpt(response, length=300):
 RELATION_TABLE = 'cmdb_rel_ci'
 RELATION_MATCH = 'rel'
 
+# The field naming the class of a CI, read along in a comparison
+CLASS_FIELD = 'sys_class_name'
+
+
+def compare_names(in_snow, classes, hostnames):
+    """
+    The number of Syncer hosts, the names found on both sides and on
+    one side only, each with the classes of its ServiceNow records, and
+    the count per class.
+    `in_snow` and `classes` are keyed by the lower case name.
+    """
+    in_syncer = {name.lower(): name for name in hostnames}
+    per_class = {}
+    for key, found in classes.items():
+        status = 'matched' if key in in_syncer else 'extra'
+        for name in found:
+            counts = per_class.setdefault(name, {'class': name, 'matched': 0, 'extra': 0})
+            counts[status] += 1
+
+    def entries(keys, names):
+        """ Names with their classes, grouped by class """
+        return sorted(({'name': names[x],
+                        'class': ', '.join(sorted(classes.get(x, set()) - {''}))}
+                       for x in keys), key=lambda x: (x['class'], x['name']))
+    return {
+        'syncer_hosts': len(in_syncer),
+        'matched': entries(in_snow.keys() & in_syncer.keys(), in_syncer),
+        'missing_in_snow': entries(in_syncer.keys() - in_snow.keys(), in_syncer),
+        'missing_in_syncer': entries(in_snow.keys() - in_syncer.keys(), in_snow),
+        'by_class': sorted(per_class.values(), key=lambda x: (-x['extra'], x['class'])),
+    }
+
 
 def parse_inventorize_tables(value):
     """
@@ -698,35 +730,41 @@ class SyncServiceNow(Plugin):
         Names are compared without case, ServiceNow often keeps them in
         capitals. Changes nothing.
 
-        Without a hostname rewrite only the hostname field is asked for,
-        which keeps the read of a large table short. A rewrite may use
-        any field, so then the field list of the account applies.
+        Without a hostname rewrite only the hostname field and the class
+        are asked for, which keeps the read of a large table short. A
+        rewrite may use any field, so then the field list of the account
+        applies, with the class added.
+
+        Every ServiceNow name comes with the class of its records, and
+        `by_class` counts per class how many names have a Syncer host
+        and how many have none, the classes with most names without a
+        host first.
         """
-        fields = None
+        fields = self.config.get('sysparm_fields')
         if not self.config.get('rewrite_hostname'):
-            fields = self.config.get('hostname_field') or 'name'
+            fields = f"{self.config.get('hostname_field') or 'name'},{CLASS_FIELD}"
+        elif fields and CLASS_FIELD not in [x.strip() for x in fields.split(',')]:
+            fields = f"{fields},{CLASS_FIELD}"
         in_snow = {}
+        classes = {}
         records = unnamed = 0
-        for record in self.get_table(table, fields=fields):
+        for record in self.get_table(table, fields=fields or None):
             records += 1
-            names = self.record_hostnames(self.flatten_record(record))
+            labels = self.flatten_record(record)
+            names = self.record_hostnames(labels)
             if not names:
                 unnamed += 1
             for name in names:
                 in_snow.setdefault(name.lower(), name)
-        in_syncer = {name.lower(): name for name in hostnames}
+                classes.setdefault(name.lower(), set()).add(labels.get(CLASS_FIELD, ''))
         return {
             'url': self.table_url(table),
-            'params': self.table_params(self.page_size(), fields=fields),
+            'params': self.table_params(self.page_size(), fields=fields or None),
             'limits': self.last_rate_limit or {},
             'records': records,
             'unnamed': unnamed,
             'snow_names': len(in_snow),
-            'syncer_hosts': len(in_syncer),
-            'matched': sorted(in_syncer[x] for x in in_snow.keys() & in_syncer.keys()),
-            'missing_in_snow': sorted(in_syncer[x] for x in in_syncer.keys() - in_snow.keys()),
-            'missing_in_syncer': sorted(in_snow[x] for x in in_snow.keys() - in_syncer.keys()),
-        }
+        } | compare_names(in_snow, classes, hostnames)
 
 #.
 #   .-- Import hosts

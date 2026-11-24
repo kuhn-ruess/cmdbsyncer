@@ -330,18 +330,22 @@ class TestCompareHosts(unittest.TestCase):
         instance.get_table = get_table
         return instance.compare_hosts('cmdb_ci', hostnames), asked
 
+    @staticmethod
+    def _names(entries):
+        return [x['name'] for x in entries]
+
     def test_names_are_compared_without_case(self):
         result, _ = self._compare([{'name': 'SRV01'}, {'name': 'srv02'}, {'name': ''}],
                                    ['srv01', 'srv03'])
         self.assertEqual(result['records'], 3)
         self.assertEqual(result['unnamed'], 1)
-        self.assertEqual(result['matched'], ['srv01'])
-        self.assertEqual(result['missing_in_snow'], ['srv03'])
-        self.assertEqual(result['missing_in_syncer'], ['srv02'])
+        self.assertEqual(self._names(result['matched']), ['srv01'])
+        self.assertEqual(self._names(result['missing_in_snow']), ['srv03'])
+        self.assertEqual(self._names(result['missing_in_syncer']), ['srv02'])
 
-    def test_only_the_hostname_field_is_read(self):
+    def test_only_the_hostname_field_and_the_class_are_read(self):
         _, asked = self._compare([], [], hostname_field='fqdn')
-        self.assertEqual(asked, ['fqdn'])
+        self.assertEqual(asked, ['fqdn,sys_class_name'])
 
     def test_a_rewrite_keeps_the_fields_of_the_account(self):
         with patch.object(snow.Host, 'rewrite_hostname', create=True,
@@ -349,7 +353,46 @@ class TestCompareHosts(unittest.TestCase):
             result, asked = self._compare([{'name': 'srv01'}], ['srv01.example.com'],
                                           rewrite_hostname='{{ HOSTNAME }}.example.com')
         self.assertEqual(asked, [None])
-        self.assertEqual(result['matched'], ['srv01.example.com'])
+        self.assertEqual(self._names(result['matched']), ['srv01.example.com'])
+
+    def test_a_rewrite_adds_the_class_to_the_fields_of_the_account(self):
+        with patch.object(snow.Host, 'rewrite_hostname', create=True, return_value='srv01'):
+            _, asked = self._compare([], [], rewrite_hostname='{{ HOSTNAME }}',
+                                     sysparm_fields='name, fqdn')
+            self.assertEqual(asked, ['name, fqdn,sys_class_name'])
+            _, asked = self._compare([], [], rewrite_hostname='{{ HOSTNAME }}',
+                                     sysparm_fields='name,sys_class_name')
+            self.assertEqual(asked, ['name,sys_class_name'])
+
+    def test_names_carry_their_class(self):
+        result, _ = self._compare(
+            [{'name': 'srv01', 'sys_class_name': 'Linux Server'},
+             {'name': 'srv02', 'sys_class_name': 'Linux Server'},
+             {'name': 'SRV02', 'sys_class_name': 'Server'},
+             {'name': 'pc01', 'sys_class_name': 'Computer'},
+             {'name': 'x01'}],
+            ['srv01', 'srv03'])
+        self.assertEqual(result['matched'], [{'name': 'srv01', 'class': 'Linux Server'}])
+        self.assertEqual(result['missing_in_snow'], [{'name': 'srv03', 'class': ''}])
+        # Grouped by class, a name of several classes names them all
+        self.assertEqual(result['missing_in_syncer'],
+                         [{'name': 'x01', 'class': ''},
+                          {'name': 'pc01', 'class': 'Computer'},
+                          {'name': 'srv02', 'class': 'Linux Server, Server'}])
+
+    def test_classes_count_names_with_and_without_host(self):
+        result, _ = self._compare(
+            [{'name': 'srv01', 'sys_class_name': 'Linux Server'},
+             {'name': 'srv02', 'sys_class_name': 'Linux Server'},
+             {'name': 'srv03', 'sys_class_name': 'Linux Server'},
+             {'name': 'pc01', 'sys_class_name': 'Computer'},
+             {'name': 'win01', 'sys_class_name': 'Windows Server'}],
+            ['srv01', 'win01'])
+        self.assertEqual(result['by_class'], [
+            {'class': 'Linux Server', 'matched': 1, 'extra': 2},
+            {'class': 'Computer', 'matched': 0, 'extra': 1},
+            {'class': 'Windows Server', 'matched': 1, 'extra': 0},
+        ])
 
 
 class TestInventorizeTables(unittest.TestCase):

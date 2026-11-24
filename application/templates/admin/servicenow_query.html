@@ -169,11 +169,13 @@
     {# Syncer names link to their host, ServiceNow-only names have none #}
     {% set compare_lists = [
         {'id': 'compare-matched', 'title': 'Found in both', 'badge': 'success',
-         'names': comparison.matched, 'hosts': True},
+         'names': comparison.matched, 'hosts': True, 'classes': True},
         {'id': 'compare-missing-in-snow', 'title': 'Syncer hosts missing in ServiceNow',
-         'badge': 'warning', 'names': comparison.missing_in_snow, 'hosts': True},
+         'badge': 'warning', 'names': comparison.missing_in_snow, 'hosts': True,
+         'classes': False},
         {'id': 'compare-missing-in-syncer', 'title': 'ServiceNow names without Syncer host',
-         'badge': 'secondary', 'names': comparison.missing_in_syncer, 'hosts': False},
+         'badge': 'secondary', 'names': comparison.missing_in_syncer, 'hosts': False,
+         'classes': True},
     ] %}
     <p>
         Used request: <code>{{ comparison.url }}</code><br/>
@@ -211,19 +213,63 @@
         </div>
     </div>
 
+    {% if comparison.by_class %}
+    <div class="card app-card mb-4">
+        <div class="card-header">
+            ServiceNow names by class
+            <small class="text-muted ml-1">
+                <em>partly in the Syncer</em>: the class has names with and
+                without Syncer host
+            </small>
+        </div>
+        <div class="card-body p-0" style="max-height: 25rem; overflow-y: auto;">
+            <table class="table table-sm table-striped mb-0">
+                <thead>
+                    <tr><th>Class</th><th>With Syncer host</th>
+                        <th>Without Syncer host</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in comparison.by_class %}
+                    <tr>
+                        <td>
+                            {%- if row['class'] -%}{{ row['class'] }}
+                            {%- else -%}<em class="text-muted">no class</em>{%- endif -%}
+                            {% if row.matched and row.extra %}
+                            <span class="badge badge-info ml-1">partly in the Syncer</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ row.matched }}</td>
+                        <td>{{ row.extra }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
     {% for list in compare_lists if list.names %}
     <details class="mb-3" id="{{ list.id }}">
         <summary>{{ list.title }} ({{ list.names | length }})</summary>
         <div class="card app-card mt-2" style="max-height: 25rem; overflow-y: auto;">
-            <div class="card-body py-2">
-                {% for name in list.names %}
-                <div>
-                    {%- if list.hosts -%}
-                    <a href="{{ url_for('host.debug', hostname=name) }}">{{ name }}</a>
-                    {%- else -%}{{ name }}{%- endif -%}
-                </div>
-                {% endfor %}
-            </div>
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr><th>Name</th>
+                        {% if list.classes %}<th>Class in ServiceNow</th>{% endif %}</tr>
+                </thead>
+                <tbody>
+                    {% for entry in list.names %}
+                    <tr>
+                        <td>
+                            {%- if list.hosts -%}
+                            <a href="{{ url_for('host.debug', hostname=entry.name) }}">{{ entry.name }}</a>
+                            {%- else -%}{{ entry.name }}{%- endif -%}
+                        </td>
+                        {% if list.classes %}<td>{{ entry['class'] }}</td>{% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </details>
     {% endfor %}
