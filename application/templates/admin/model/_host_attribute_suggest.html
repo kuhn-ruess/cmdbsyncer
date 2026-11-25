@@ -1,0 +1,60 @@
+{# Suggestions for host attributes given by name (DCD creation rules).
+
+   The name field offers the built-in Checkmk host attributes (IP address,
+   agent, SNMP, ...) of the Checkmk rule actions; any other name can still be
+   typed. Once a known name is set, the value field shows the example of that
+   attribute and, for tags, offers their values. #}
+<datalist id="host-attribute-names">
+  {% for attr in host_attribute_suggestions|default([]) %}
+  <option value="{{ attr.value }}" label="{{ attr.name }}"></option>
+  {% endfor %}
+</datalist>
+{% for attr in host_attribute_suggestions|default([]) if attr['values'] %}
+<datalist id="host-attribute-values-{{ attr.value }}">
+  {% for value in attr['values'] %}
+  <option value="{{ value }}"></option>
+  {% endfor %}
+</datalist>
+{% endfor %}
+<script>
+(function() {
+  var SUGGESTIONS = {{ host_attribute_suggestions|default([])|tojson }};
+  var BY_NAME = {};
+  SUGGESTIONS.forEach(function(a) { BY_NAME[a.value] = a; });
+
+  function isNameInput(el) {
+    return el && el.tagName === 'INPUT' && /-attribute_name$/.test(el.name || '');
+  }
+
+  // The value field of the same row: same name, other suffix.
+  function valueInput(nameInput) {
+    var name = nameInput.name.replace(/-attribute_name$/, '-attribute_value');
+    return nameInput.form && nameInput.form.querySelector(
+      'input[name="' + name + '"]');
+  }
+
+  function apply(nameInput) {
+    nameInput.setAttribute('list', 'host-attribute-names');
+    var input = valueInput(nameInput);
+    if (!input) { return; }
+    var attr = BY_NAME[nameInput.value.trim()];
+    input.setAttribute('placeholder', attr ? attr.param : '');
+    if (attr && attr.values.length) {
+      input.setAttribute('list', 'host-attribute-values-' + attr.value);
+    } else {
+      input.removeAttribute('list');
+    }
+  }
+
+  // Delegated, so rows added later with "Add" work the same.
+  ['focusin', 'input', 'change'].forEach(function(type) {
+    document.addEventListener(type, function(event) {
+      if (isNameInput(event.target)) { apply(event.target); }
+    });
+  });
+
+  document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('input[name$="-attribute_name"]').forEach(apply);
+  });
+})();
+</script>

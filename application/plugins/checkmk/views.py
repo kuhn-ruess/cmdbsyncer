@@ -58,6 +58,7 @@ from .models import (
     ACTION_CATALOG,
     DEPRECATED_ACTIONS,
     DEPRECATION_WARNING,
+    HOST_ATTRIBUTE_SUGGESTIONS,
     CheckmkSite,
     CheckmkSettings,
     CheckmkRuleMngmt,
@@ -3012,6 +3013,9 @@ class CheckmkDCDView(ListSourceViewMixin, RuleModelView):  # pylint: disable=too
     Custom DCD Rule View
     """
 
+    create_template = 'admin/model/checkmk_dcd_create.html'
+    edit_template = 'admin/model/checkmk_dcd_edit.html'
+
     column_editable_list = [
         'enabled',
 
@@ -3111,6 +3115,11 @@ class CheckmkDCDView(ListSourceViewMixin, RuleModelView):  # pylint: disable=too
         self.form_subdocuments = base_subdocs
 
         super().__init__(model, **kwargs)
+
+    def render(self, template, **kwargs):
+        """Feed the host attribute suggestions to the creation rules."""
+        kwargs.setdefault('host_attribute_suggestions', HOST_ATTRIBUTE_SUGGESTIONS)
+        return super().render(template, **kwargs)
 
     def is_accessible(self):
         """ Overwrite """

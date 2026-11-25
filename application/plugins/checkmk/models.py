@@ -232,6 +232,15 @@ BUILTIN_ATTRIBUTE_ACTIONS = {
     if action.get("attr")
 }
 
+# The same built-in attributes keyed by their Checkmk attribute, offered as
+# suggestions where a form takes a host attribute by name (DCD creation rules).
+HOST_ATTRIBUTE_SUGGESTIONS = [
+    {"value": action["attr"], "name": action["name"],
+     "param": action["param"], "values": action.get("values", [])}
+    for group in ACTION_CATALOG for action in group["actions"]
+    if action.get("attr")
+]
+
 # Actions no longer selectable for new rules. Legacy rules may still carry
 # them, but such rules can no longer be saved until the action is migrated.
 DEPRECATED_ACTIONS = {
