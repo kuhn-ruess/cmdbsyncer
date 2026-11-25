@@ -2,6 +2,28 @@
 # The commands run without a shell and get every value as its own
 # argument, so a secret with spaces, quotes, $ or backslashes reaches
 # the agent unchanged.
+
+# A registered agent is not registered again, as in the Checkmk Ansible
+# collection: cmk-agent-ctl keeps its connections as "server/site", the
+# updater writes server, site and its last error into its cache.
+- name: "Read the registrations of the agent"
+  become: true
+  ansible.builtin.command:
+    argv: [cat, /var/lib/cmk-agent/registered_connections.json]
+  register: cmk_tls_connections
+  changed_when: false
+  failed_when: false
+  when: cmk_register_tls | bool
+
+- name: "Read the state of the agent updater"
+  become: true
+  ansible.builtin.command:
+    argv: [cat, /var/lib/check_mk_agent/cache/plugins_cmk-update-agent.cache]
+  register: cmk_updater_state
+  changed_when: false
+  failed_when: false
+  when: (cmk_register_bakery | bool) or (cmk_register_central_bakery | bool)
+
 - name: "Register Agent for TLS."
   become: true
   ansible.builtin.command:
@@ -20,7 +42,12 @@
       - "{{ cmk_secret }}"
       - --trust-cert
   no_log: true
-  when: cmk_register_tls | bool
+  vars:
+    cmk_tls_server: "{{ cmk_server_ip if cmk_server_ip else cmk_server }}"
+  when:
+    - cmk_register_tls | bool
+    - ('"' ~ cmk_tls_server ~ '/' ~ cmk_site ~ '"') not in (cmk_tls_connections.stdout | default(''))
+  changed_when: "'Registration complete' in cmk_register_tls_result.stdout | default('')"
   register: cmk_register_tls_result
   ignore_errors: yes
 
@@ -50,7 +77,15 @@
       - --password
       - "{{ cmk_secret }}"
   no_log: true
-  when: cmk_register_bakery | bool
+  vars:
+    cmk_updater_server: "{{ cmk_server_ip if cmk_server_ip else cmk_server }}"
+  when:
+    - cmk_register_bakery | bool
+    - >-
+      not (((cmk_updater_server ~ '/' ~ cmk_site) in (cmk_updater_state.stdout | default(''))
+      or (cmk_updater_server ~ ':' ~ cmk_server_port ~ '/' ~ cmk_site) in (cmk_updater_state.stdout | default('')))
+      and '"error": null' in (cmk_updater_state.stdout | default('')))
+  changed_when: "'Successfully registered agent of host' in cmk_register_bakery_result.stderr | default('')"
   register: cmk_register_bakery_result
   ignore_errors: yes
 
@@ -80,7 +115,15 @@
       - --password
       - "{{ cmk_secret }}"
   no_log: true
-  when: cmk_register_central_bakery | bool
+  vars:
+    cmk_updater_server: "{{ cmk_main_server_ip if cmk_main_server_ip else cmk_main_server }}"
+  when:
+    - cmk_register_central_bakery | bool
+    - >-
+      not (((cmk_updater_server ~ '/' ~ cmk_main_site) in (cmk_updater_state.stdout | default(''))
+      or (cmk_updater_server ~ ':' ~ cmk_server_port ~ '/' ~ cmk_main_site) in (cmk_updater_state.stdout | default('')))
+      and '"error": null' in (cmk_updater_state.stdout | default('')))
+  changed_when: "'Successfully registered agent of host' in cmk_register_central_bakery_result.stderr | default('')"
   register: cmk_register_central_bakery_result
   ignore_errors: yes
 
@@ -98,5 +141,6 @@
   loop:
     - /var/lib/check_mk_agent/cache/plugins_3600/cmk-update-agent.cache
     - /var/lib/check_mk_agent/cache/plugins_cmk-update-agent.cache
-  when: (cmk_register_central_bakery | bool) or (cmk_register_bakery | bool)
+  # Only after a registration of this run, so the cache shows it
+  when: (cmk_register_bakery_result is not skipped) or (cmk_register_central_bakery_result is not skipped)
   ignore_errors: yes

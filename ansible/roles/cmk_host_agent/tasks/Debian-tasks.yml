@@ -14,6 +14,9 @@
   no_log: true
   when: cmk_install_agent | bool
   register: checkmk_agent_download_state
+  until: checkmk_agent_download_state is not failed
+  retries: 3
+  delay: 10
   ignore_errors: yes
 
 - name: "Report the error"
@@ -29,5 +32,27 @@
     deb: "{{ cmk_linux_tmp }}/cmk_agent.deb"
     state: present
   when: (cmk_install_agent | bool) and checkmk_agent_download_state.status == 200
+
+# Only with an active ufw, as in the Checkmk Ansible collection. With
+# cmk_server_ip only the Checkmk server may connect, else the port is open.
+- name: "Check if ufw is active"
+  become: true
+  ansible.builtin.command:
+    argv: [ufw, status]
+  register: cmk_ufw_state
+  changed_when: false
+  failed_when: false
+  when: configure_firewall | bool
+
+- name: "Set Firewall to allow Access to {{ cmk_agent_port }}"
+  become: true
+  community.general.ufw:
+    rule: allow
+    port: "{{ cmk_agent_port | string }}"
+    proto: tcp
+    from_ip: "{{ cmk_server_ip if cmk_server_ip else 'any' }}"
+  when:
+    - configure_firewall | bool
+    - "'Status: active' in (cmk_ufw_state.stdout | default(''))"
 
 - ansible.builtin.include_tasks: "Linux-tasks.yml"
