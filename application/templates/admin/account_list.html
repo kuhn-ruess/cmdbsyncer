@@ -20,6 +20,8 @@
     margin-left: 0.75em;
   }
   tr.account-child-row.account-child-disabled a { text-decoration: line-through; }
+  /* A long URL breaks anywhere instead of widening the list */
+  table.model-list td.col-address { overflow-wrap: anywhere; }
 </style>
 <script>
 (function() {

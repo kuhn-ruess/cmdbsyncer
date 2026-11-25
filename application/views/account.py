@@ -19,7 +19,8 @@ from application import plugin_register
 from application.models.cron import CronGroup, job_account, job_account_id
 from application.views.default import DefaultModelView, name_and_enabled_filters
 from application.views._form_sections import modern_form, section
-from application.models.account import CustomEntry, Account, account_restrictions
+from application.models.account import (CustomEntry, Account, account_restrictions,
+                                        object_types)
 from application.models.host import Host
 from application.models.host_templates import assignable_templates
 from application.helpers.get_account import get_account_by_name
@@ -368,6 +369,28 @@ def _render_role(_view, _context, model, _name):
     return Markup(html)
 
 
+def _render_options(_view, _context, model, _name):
+    """
+    The switches of the account in one column, only those that are set:
+    one column per switch made the list wider than the window
+    """
+    options = []
+    if model.is_master:
+        options.append('Master')
+    if model.shadow_mode:
+        options.append('Shadow source')
+    if model.is_object:
+        labels = dict(object_types)
+        options.append(f"Objects: {labels.get(model.object_type, model.object_type or '')}")
+    if model.cmdb_object:
+        options.append('CMDB object')
+    if model.check_for_valid_hostname:
+        options.append('Valid hostnames only')
+    if model.require_fqdn:
+        options.append('FQDN required')
+    return Markup('<br>'.join(escape(option) for option in options))
+
+
 def child_name(model):
     """
     A name for a child account saved without one: the parent and its
@@ -527,8 +550,10 @@ class AccountModelView(_SourceViewMixin, DefaultModelView):
 
     column_filters = name_and_enabled_filters()
 
-    column_exclude_list = ['custom_fields', 'is_child', 'parent', 'password_crypted',
-                           'auto_apply_templates', 'account_jobs']
+    # Role and Enabled up front, the switches in one column, so the list
+    # fits the window
+    column_list = ['name', 'type', 'restrict_to', 'enabled', 'address', 'username',
+                   'password', 'plugin_settings', 'options']
 
     # The custom fields are name/value pairs, so what they configure is
     # invisible in the form. These templates add the help of a field
@@ -616,6 +641,7 @@ class AccountModelView(_SourceViewMixin, DefaultModelView):
         'cmdb_object': 'CMDB object',
         'restrict_to': 'Role',
         'account_jobs': 'Jobs',
+        'options': 'Options',
         'shadow_mode': 'Shadow source',
         'auto_apply_templates': 'Auto Apply Templates',
     }
@@ -675,6 +701,7 @@ class AccountModelView(_SourceViewMixin, DefaultModelView):
         'plugin_settings': _render_plugin_data,
         'type': _render_type,
         'restrict_to': _render_role,
+        'options': _render_options,
     }
 
     form_overrides = {
