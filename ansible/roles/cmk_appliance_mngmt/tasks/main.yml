@@ -142,7 +142,8 @@
 # Same steps as the appliance web interface (webconf/pages/site_update.py):
 # free the site's resources, keep autostart off during the update, refresh
 # the apache config, and start through systemd for the memory limits.
-# A failed 2.5 pre-flight check aborts unless cmk_preflight is ignore.
+# omd update as on an OMD server, it went through when it prints
+# "Finished update".
 - name: "Update Site to {{ cmk_version }}.{{ cmk_edition }}"
   ansible.builtin.shell: |
     set -e
@@ -152,11 +153,7 @@
     omd stop "$site" || true
     omd umount --kill "$site"
     if [ "$autostart" = on ]; then omd config "$site" set AUTOSTART off; fi
-    {% if cmk_version is version('2.5.0', '>=') %}
-    omd -V "$target" update --pre-flight={{ cmk_preflight | quote }} --skeleton=install --confirm-version --confirm-edition "$site"
-    {% else %}
     omd -f -V "$target" update --conflict=install "$site"
-    {% endif %}
     if [ "$autostart" = on ]; then omd config "$site" set AUTOSTART on; fi
     if omd -V "$target" help 2>&1 | grep -q update-apache-config; then
       omd -V "$target" update-apache-config "$site"
@@ -165,6 +162,7 @@
   args:
     executable: /bin/bash
   register: site_update
+  failed_when: site_update.rc != 0 or 'Finished update' not in site_update.stdout
   when: server_site_version.stdout != cmk_version+"."+cmk_edition
 
 # The same step as on an OMD server

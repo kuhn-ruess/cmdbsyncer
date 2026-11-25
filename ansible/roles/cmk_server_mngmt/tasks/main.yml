@@ -1,12 +1,12 @@
+---
+# Install the Checkmk version of the settings on the server, create the
+# site when it is missing, otherwise update it to that version.
 
-# The installer is staged on the controller in `installation_staging_path`
-# (from the Checkmk Settings, served via the inventory), falling back to
-# /tmp when it is unset. Set the path to something other than /tmp whenever
-# the executing user can't reliably use /tmp — e.g. permission problems or
-# private-tmp isolation, where a /tmp staged file is not visible to the
-# copy step. The install target below stays /tmp on the remote host.
-- name: "Determine the local staging directory for the installer"
+- name: "Set the target version and the local staging directory"
   ansible.builtin.set_fact:
+    cmk_target: "{{ cmk_version }}.{{ cmk_edition }}"
+    # The installer is staged on the controller, /tmp unless the settings
+    # name another directory (private /tmp, no permission there)
     cmk_local_staging: "{{ installation_staging_path | default('/tmp', true) }}"
 
 - name: "Ensure the local staging directory exists"
@@ -21,9 +21,8 @@
   register: installation_file
   delegate_to: localhost
 
-# The file is looked for on the controller, whose user, working directory
-# and /tmp differ between a pip installation, the container and a run from
-# the web interface, so name the full path.
+# User, working directory and /tmp of the controller differ between a pip
+# installation, the container and a run from the web interface
 - name: "Show where the Installation File is looked for"
   ansible.builtin.debug:
     msg: >-
@@ -33,21 +32,18 @@
 
 - name: "Download Installation File from Checkmk Server"
   ansible.builtin.uri:
-    url: "https://download.checkmk.com/checkmk/{{ cmk_version }}/{{ cmk_version_filename}}"
+    url: "https://download.checkmk.com/checkmk/{{ cmk_version }}/{{ cmk_version_filename }}"
     dest: "{{ cmk_local_staging }}/{{ cmk_version_filename }}"
     method: GET
     user: "{{ subscription_username }}"
     password: "{{ subscription_password }}"
-    force_basic_auth: True
-  # Through the download proxy of the Checkmk Settings, when one is set.
-  # Without, the proxy settings of the controller's environment apply.
+    force_basic_auth: true
+  # The download proxy of the settings, else the proxy of the controller
   environment: "{{ {'https_proxy': download_proxy, 'http_proxy': download_proxy} if (download_proxy | default('') | trim) else {} }}"
   when: not installation_file.stat.exists
   delegate_to: localhost
 
-# Exact match on version and edition: a grep for the version alone also
-# hit 2.5.0p19 for 2.5.0p1 or gave two lines for two editions, and then
-# installed again on every run.
+# Exact match on version and edition: 2.5.0p1 must not match 2.5.0p19
 - name: "Check if Version is already installed on the Servers"
   ansible.builtin.command:
     argv: [omd, versions, --bare]
@@ -57,7 +53,7 @@
 
 - name: "Remember if the Version is installed"
   ansible.builtin.set_fact:
-    cmk_version_missing: "{{ (cmk_version ~ '.' ~ cmk_edition) not in (checkmk_version_installed.stdout_lines | default([])) }}"
+    cmk_version_missing: "{{ cmk_target not in (checkmk_version_installed.stdout_lines | default([])) }}"
 
 - name: "Copy Installation File to Servers"
   ansible.builtin.copy:
@@ -67,133 +63,112 @@
 
 - ansible.builtin.include_tasks: "{{ ansible_os_family }}-tasks.yml"
 
-
-- name: "Check Site versions"
-  become: True
-  ansible.builtin.shell: |
-    set -o pipefail
-    omd version {{ cmk_site }} | egrep -o '[^ ]+$'
-  args:
-    executable: /bin/bash
-  changed_when: server_site_version.stdout != cmk_version+"."+cmk_edition
-  register: server_site_version
-  ignore_errors: True
-
-# Checked by the site directory, the "no such site" message of omd differs
+# By the site directory: the "no such site" message of omd differs
 # between Checkmk versions
 - name: "Check if the Site exists"
-  become: True
+  become: true
   ansible.builtin.stat:
     path: "/omd/sites/{{ cmk_site }}"
   register: site_dir
 
-- name: "Create needed Sites on Servers"
-  become: True
+- name: "Create the Site {{ cmk_site }}"
+  become: true
   ansible.builtin.shell: |
     set -e
-    omd -V {{ cmk_version }}.{{ cmk_edition }} create {{ ('--admin-password ' ~ (inital_password | quote)) if inital_password else '' }} {{ cmk_site }}
-    omd start {{ cmk_site }}
+    omd -V {{ cmk_target | quote }} create {{ ('--admin-password ' ~ (inital_password | quote)) if inital_password else '' }} {{ cmk_site | quote }}
+    omd start {{ cmk_site | quote }}
   args:
     executable: /bin/bash
   when: not site_dir.stat.exists
-  register: site_just_installed
 
-# A call before the update, a VM snapshot for example; a failed one stops
-# the update of this server here, before the downtime
-- name: "Call before the site update"
-  ansible.builtin.include_tasks: pre_update_call.yml
+- name: "Check the Site version"
+  become: true
+  ansible.builtin.command:
+    argv: [omd, version, --bare, "{{ cmk_site }}"]
+  register: site_version_before
+  changed_when: false
+  when: site_dir.stat.exists
+
+- name: "Update the Site {{ cmk_site }} to {{ cmk_target }}"
   when:
-    - (cmk_pre_update_url | default('') | trim) != ''
-    - server_site_version.stdout != cmk_version+"."+cmk_edition
-    - not site_just_installed.changed
+    - site_dir.stat.exists
+    - (site_version_before.stdout | default('') | trim) != cmk_target
+  block:
+    # A VM snapshot for example; a failed call stops this server here,
+    # before the downtime
+    - name: "Call before the site update"
+      ansible.builtin.include_tasks: pre_update_call.yml
+      when: (cmk_pre_update_url | default('') | trim) != ''
 
-# Calculated by Ansible itself: the date command of the container image
-# (BusyBox) knows neither --date '+2 hours' nor the %:z format.
-- name: "Calculation downtime start and end +{{ cmk_downtime_range }} hours"
-  ansible.builtin.set_fact:
-    checkmk_downtime_start: "{{ '%Y-%m-%dT%H:%M:%S+00:00' | strftime(now().timestamp(), utc=True) }}"
-    checkmk_downtime_end: "{{ '%Y-%m-%dT%H:%M:%S+00:00' | strftime(now().timestamp() + (cmk_downtime_range | float) * 3600, utc=True) }}"
+    # Computed by Ansible: the date of the container image (BusyBox)
+    # knows neither --date '+2 hours' nor %:z
+    - name: "Calculate the downtime window of {{ cmk_downtime_range }} hours"
+      ansible.builtin.set_fact:
+        checkmk_downtime_start: "{{ '%Y-%m-%dT%H:%M:%S+00:00' | strftime(now().timestamp(), utc=True) }}"
+        checkmk_downtime_end: "{{ '%Y-%m-%dT%H:%M:%S+00:00' | strftime(now().timestamp() + (cmk_downtime_range | float) * 3600, utc=True) }}"
 
-- name: "Set host to downtime before site update"
-  ansible.builtin.uri:
-    url: "{{ cmk_main_server_full }}/check_mk/api/1.0/domain-types/downtime/collections/host"
-    method: POST
-    # Checkmk answers a created downtime with 204 No Content
-    status_code: [200, 204]
-    validate_certs: no
-    url_username: "{{ cmk_user }}"
-    url_password: "{{ cmk_secret }}"
-    force_basic_auth: true
-    headers:
-      Accept: "application/json"
-      Content-Type: "application/json"
-    body_format: json
-    body:
-      start_time: "{{ checkmk_downtime_start }}"
-      end_time: "{{ checkmk_downtime_end }}"
-      comment: "Site update in progress"
-      downtime_type: "host"
-      host_name: "{{ cmk_agent_host_name }}"
-  no_log: true
-  when: server_site_version.stdout != cmk_version+"."+cmk_edition and not site_just_installed.changed and (cmk_user | default('') | trim) != '' and (cmk_secret | default('') | trim) != ''
-  ignore_errors: yes
-  delegate_to: localhost
-  register: downtime_result
+    - name: "Set host to downtime before site update"
+      ansible.builtin.uri:
+        url: "{{ cmk_main_server_full }}/check_mk/api/1.0/domain-types/downtime/collections/host"
+        method: POST
+        # Checkmk answers a created downtime with 204 No Content
+        status_code: [200, 204]
+        validate_certs: false
+        url_username: "{{ cmk_user }}"
+        url_password: "{{ cmk_secret }}"
+        force_basic_auth: true
+        headers:
+          Accept: "application/json"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          start_time: "{{ checkmk_downtime_start }}"
+          end_time: "{{ checkmk_downtime_end }}"
+          comment: "Site update in progress"
+          downtime_type: "host"
+          host_name: "{{ cmk_agent_host_name }}"
+      no_log: true
+      when:
+        - (cmk_user | default('') | trim) != ''
+        - (cmk_secret | default('') | trim) != ''
+      ignore_errors: true
+      delegate_to: localhost
+      register: downtime_result
 
-# no_log hides the answer of the failed request above; the status and the
-# reason of Checkmk carry no credentials, so the run says why
-- name: "Downtime not set, the update goes on"
-  ansible.builtin.debug:
-    msg: >-
-      Checkmk did not set the downtime of {{ cmk_agent_host_name }} on
-      {{ cmk_main_server_full }}: HTTP {{ downtime_result.status | default('no answer') }}
-      {{ (downtime_result.json | default({})).get('title', '') }}
-      {{ (downtime_result.json | default({})).get('detail', '') }}
-      {{ '' if downtime_result.json is defined else (downtime_result.msg | default('') | truncate(300)) }}
-  when: downtime_result is failed
+    # no_log hides the answer; status and reason carry no credentials
+    - name: "Downtime not set, the update goes on"
+      ansible.builtin.debug:
+        msg: >-
+          Checkmk did not set the downtime of {{ cmk_agent_host_name }} on
+          {{ cmk_main_server_full }}: HTTP {{ downtime_result.status | default('no answer') }}
+          {{ (downtime_result.json | default({})).get('title', '') }}
+          {{ (downtime_result.json | default({})).get('detail', '') }}
+          {{ '' if downtime_result.json is defined else (downtime_result.msg | default('') | truncate(300)) }}
+      when: downtime_result is failed
 
-# Checkmk 2.5 asks for the new version and edition and runs a pre-flight
-# check during the update. Confirm the questions; what a failed pre-flight
-# check does is up to cmk_preflight: abort (default) or ignore, for findings
-# like deprecated check_http rules that should not stop the update. Older
-# versions only know --conflict.
-# The site is started again either way; a failed update fails the next task
-# with the reasons omd printed, instead of passing as changed.
-- name: "Update Sites to {{ cmk_version }}.{{ cmk_edition }}"
-  become: True
-  ansible.builtin.shell: |
-    omd stop {{ cmk_site }}
-    rc=0
-    {% if cmk_version is version('2.5.0', '>=') %}
-    omd -V {{ cmk_version }}.{{ cmk_edition }} update --pre-flight={{ cmk_preflight | quote }} --skeleton=install --confirm-version --confirm-edition {{ cmk_site }} || rc=$?
-    {% else %}
-    omd -f -V {{ cmk_version }}.{{ cmk_edition }} update --conflict=install {{ cmk_site }} || rc=$?
-    {% endif %}
-    omd start {{ cmk_site }}
-    exit $rc
-  args:
-    executable: /bin/bash
-  register: site_update
-  failed_when: false
-  when: server_site_version.stdout != cmk_version+"."+cmk_edition and not site_just_installed.changed
+    # The update of the Checkmk Ansible collection, for every version: -f
+    # confirms version and edition, --conflict=install takes the new files
+    # and skips the pre-flight check of 2.5. omd prints "Finished update"
+    # only when the update went through.
+    - name: "Run omd update on {{ cmk_site }}"
+      become: true
+      ansible.builtin.shell: |
+        omd stop {{ cmk_site | quote }}
+        omd -f -V {{ cmk_target | quote }} update --conflict=install {{ cmk_site | quote }}
+        omd start {{ cmk_site | quote }}
+      args:
+        executable: /bin/bash
+      register: site_update
+      changed_when: "'Finished update' in site_update.stdout"
+      failed_when: false
 
-- name: "Site update of {{ cmk_site }} failed"
-  vars:
-    update_output: "{{ (site_update.stdout_lines | default([])) + (site_update.stderr_lines | default([])) }}"
-    update_reasons: >-
-      {{ update_output | map('regex_replace', '^-[|] *', '')
-         | select('search', '(?i)error|incompatible|license|failed')
-         | unique | list }}
-  ansible.builtin.fail:
-    msg: >-
-      omd update of {{ cmk_site }} to {{ cmk_version }}.{{ cmk_edition }} failed
-      (exit code {{ site_update.rc }}), the site runs on its old version again:
-      {{ (update_reasons[-8:] if update_reasons else update_output[-5:]) | join(' / ') }}
-      {{ '(to update past a failed pre-flight check, set the Ansible variable cmk_preflight=ignore for this site)' if cmk_preflight == 'abort' else '' }}
-  when: site_update is not skipped and site_update.rc != 0
+    - name: "Fail when the update of {{ cmk_site }} did not finish"
+      ansible.builtin.fail:
+        msg: >-
+          omd update of {{ cmk_site }} to {{ cmk_target }} did not finish:
+          {{ ((site_update.stdout_lines | default([])) + (site_update.stderr_lines | default([])))[-5:] | join(' / ') }}
+      when: site_update is not changed
 
-- name: "Bake agents after the site update"
-  ansible.builtin.include_tasks: bake_agents.yml
-  when:
-    - cmk_bake_agents | default(false) | bool
-    - site_update is changed
+    - name: "Bake agents after the site update"
+      ansible.builtin.include_tasks: bake_agents.yml
+      when: cmk_bake_agents | default(false) | bool

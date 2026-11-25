@@ -139,7 +139,8 @@ class CmkRoleStaticTest(unittest.TestCase):
         for path in _task_files():
             for task in _tasks(path):
                 dumped = yaml.safe_dump(task, allow_unicode=True)
-                if 'cmk_secret' not in dumped:
+                # A block is checked by its tasks
+                if 'cmk_secret' not in dumped or 'block' in task:
                     continue
                 found += 1
                 where = f"{os.path.basename(path)}: {task.get('name')}"
@@ -326,7 +327,7 @@ class CmkRoleRenderTest(unittest.TestCase):
 class CmkDowntimeWindowTest(unittest.TestCase):
     """The downtime window of the site update, with no date command at all."""
 
-    TASK = 'Calculation downtime start and end +{{ cmk_downtime_range }} hours'
+    TASK = 'Calculate the downtime window of {{ cmk_downtime_range }} hours'
 
     def _window(self, downtime_range):
         task = _role_task('cmk_server_mngmt', 'main.yml', self.TASK)
@@ -407,9 +408,9 @@ _FAKE_OMD = """#!/bin/bash
 echo "omd $*" >> "$OMD_CALLS"
 case "$*" in
   *update*)
-    [ "$OMD_UPDATE_OK" = 1 ] && exit 0
+    [ "$OMD_UPDATE" = ok ] && echo "Finished update." && exit 0
+    [ "$OMD_UPDATE" = noop ] && exit 0
     echo "-| Incompatible local file '/omd/sites/mysite/local/share/check_mk/web/plugins/pages/x.py'."
-    echo "-| WARNING: A valid and non expired license is needed before updating."
     echo "-| Abort the update process? [A/c]"
     exit 1;;
 esac
@@ -418,10 +419,10 @@ esac
 
 @unittest.skipUnless(_ansible_playbook(), 'ansible-playbook not installed')
 class SiteUpdateResultTest(unittest.TestCase):
-    """A failed omd update fails the run with its reasons, and the site is
-    started again; before, the run passed and the site kept its version."""
+    """The run passes only when omd prints "Finished update", the check of
+    the Checkmk Ansible collection. The site is started again either way."""
 
-    def _run(self, update_ok, preflight='abort'):
+    def _run(self, update):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
         os.mkdir(os.path.join(tmp, 'bin'))
@@ -429,21 +430,19 @@ class SiteUpdateResultTest(unittest.TestCase):
         with open(omd, 'w', encoding='utf-8') as handle:
             handle.write(_FAKE_OMD)
         os.chmod(omd, 0o755)
-        role_tasks = _load(os.path.join(_ROLES, 'cmk_server_mngmt', 'tasks', 'main.yml'))
-        tasks = [task for task in role_tasks
-                 if task.get('name', '').startswith(('Update Sites', 'Site update of'))]
+        block = _role_task('cmk_server_mngmt', 'main.yml',
+                           'Update the Site {{ cmk_site }} to {{ cmk_target }}')
+        tasks = [task for task in block['block']
+                 if task.get('name', '').startswith(('Run omd update', 'Fail when'))]
         self.assertEqual(len(tasks), 2)
         for task in tasks:
             task.pop('become', None)
         play = [{'hosts': 'all', 'gather_facts': False, 'tasks': tasks, 'vars': {
-            'cmk_site': 'mysite', 'cmk_version': '2.5.0p19', 'cmk_edition': 'pro',
-            'server_site_version': {'stdout': '2.4.0p20.pro'},
-            'site_just_installed': {'changed': False}, 'cmk_preflight': preflight}}]
+            'cmk_site': 'mysite', 'cmk_target': '2.5.0p19.pro'}}]
         with open(os.path.join(tmp, 'play.yml'), 'w', encoding='utf-8') as handle:
             yaml.safe_dump(play, handle)
         calls = os.path.join(tmp, 'calls')
-        env = dict(os.environ, ANSIBLE_NOCOLOR='1', OMD_CALLS=calls,
-                   OMD_UPDATE_OK='1' if update_ok else '0',
+        env = dict(os.environ, ANSIBLE_NOCOLOR='1', OMD_CALLS=calls, OMD_UPDATE=update,
                    PATH=os.path.join(tmp, 'bin') + os.pathsep + os.environ['PATH'],
                    ANSIBLE_LOCAL_TEMP=os.path.join(tmp, 'local'),
                    ANSIBLE_REMOTE_TEMP=os.path.join(tmp, 'remote'))
@@ -456,31 +455,31 @@ class SiteUpdateResultTest(unittest.TestCase):
         with open(calls, encoding='utf-8') as handle:
             return proc, handle.read().splitlines()
 
-    def test_failed_update_fails_with_reasons_and_starts_the_site(self):
-        proc, calls = self._run(update_ok=False)
+    def test_failed_update_fails_with_output_and_starts_the_site(self):
+        proc, calls = self._run('fail')
         self.assertNotEqual(proc.returncode, 0)
-        self.assertIn('failed (exit code 1), the site runs on its old version again: '
-                      "Incompatible local file '/omd/sites/mysite/local/share/check_mk/"
-                      "web/plugins/pages/x.py'. / WARNING: A valid and non expired license "
-                      'is needed before updating.', proc.stdout)
-        self.assertIn('set the Ansible variable cmk_preflight=ignore', proc.stdout)
+        self.assertIn("did not finish: -| Incompatible local file", proc.stdout)
         self.assertEqual(calls[-1], 'omd start mysite')
+
+    def test_update_without_finish_fails(self):
+        proc, _calls = self._run('noop')
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn('did not finish', proc.stdout)
 
     def test_update_passes(self):
-        proc, calls = self._run(update_ok=True)
+        proc, calls = self._run('ok')
         self.assertEqual(proc.returncode, 0, proc.stdout[-2000:])
-        self.assertIn('--pre-flight=abort', calls[1])
-        self.assertEqual(calls[-1], 'omd start mysite')
+        self.assertEqual(calls, ['omd stop mysite',
+                                 'omd -f -V 2.5.0p19.pro update --conflict=install mysite',
+                                 'omd start mysite'])
+        self.assertIn('changed=1', proc.stdout)
 
-    def test_preflight_can_be_ignored(self):
-        proc, calls = self._run(update_ok=True, preflight='ignore')
-        self.assertEqual(proc.returncode, 0, proc.stdout[-2000:])
-        self.assertIn('--pre-flight=ignore', calls[1])
-
-    def test_default_is_abort(self):
+    def test_same_update_command_in_both_roles(self):
         for role in ('cmk_server_mngmt', 'cmk_appliance_mngmt'):
-            defaults = _load(os.path.join(_ROLES, role, 'defaults', 'main.yml'))
-            self.assertEqual(defaults['cmk_preflight'], 'abort', role)
+            with open(os.path.join(_ROLES, role, 'tasks', 'main.yml'), encoding='utf-8') as handle:
+                tasks = handle.read()
+            self.assertIn('update --conflict=install', tasks, role)
+            self.assertNotIn('--pre-flight', tasks, role)
 
 
 @unittest.skipUnless(_ansible_playbook(), 'ansible-playbook not installed')
@@ -505,7 +504,7 @@ class InstalledVersionTest(unittest.TestCase):
         tasks.append({'ansible.builtin.copy': {'dest': result,
                                                'content': '{{ cmk_version_missing | bool }}'}})
         play = [{'hosts': 'all', 'gather_facts': False, 'tasks': tasks, 'vars': {
-            'cmk_version': '2.5.0p1', 'cmk_edition': 'pro'}}]
+            'cmk_target': '2.5.0p1.pro'}}]
         with open(os.path.join(tmp, 'play.yml'), 'w', encoding='utf-8') as handle:
             yaml.safe_dump(play, handle)
         env = dict(os.environ, ANSIBLE_NOCOLOR='1', OMD_VERSIONS=installed,
@@ -566,15 +565,13 @@ class BakeAgentsTest(unittest.TestCase):
         self.addCleanup(server.shutdown)
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
-        role_tasks = _load(os.path.join(_ROLES, 'cmk_server_mngmt', 'tasks', 'main.yml'))
-        task = [task for task in role_tasks
-                if task.get('name') == 'Bake agents after the site update'][0]
+        task = _role_task('cmk_server_mngmt', 'main.yml', 'Bake agents after the site update')
         task['ansible.builtin.include_tasks'] = os.path.join(
             _ROLES, 'cmk_server_mngmt', 'tasks', 'bake_agents.yml')
         play = [{'hosts': 'all', 'gather_facts': False, 'tasks': [task], 'vars': dict({
             'cmk_site': 'central', 'cmk_user': USER, 'cmk_secret': SECRET,
             'cmk_main_server_full': f'http://127.0.0.1:{server.server_port}/central',
-            'site_update': {'changed': True}, 'cmk_bake_agents': True}, **variables)}]
+            'cmk_bake_agents': True}, **variables)}]
         with open(os.path.join(tmp, 'play.yml'), 'w', encoding='utf-8') as handle:
             yaml.safe_dump(play, handle, allow_unicode=True)
         env = dict(os.environ, ANSIBLE_NOCOLOR='1',
@@ -614,11 +611,17 @@ class BakeAgentsTest(unittest.TestCase):
         self.assertIn('HTTP 401 Unauthorized Wrong credentials', proc.stdout)
         self.assertNotIn(SECRET, proc.stdout)
 
-    def test_only_after_an_update_of_the_marked_site(self):
-        for variables in ({'site_update': {'changed': False}}, {'cmk_bake_agents': False}):
-            proc, calls = self._run(**variables)
-            self.assertEqual(proc.returncode, 0, proc.stdout[-2000:])
-            self.assertEqual(calls, [], variables)
+    def test_only_for_the_marked_site(self):
+        proc, calls = self._run(cmk_bake_agents=False)
+        self.assertEqual(proc.returncode, 0, proc.stdout[-2000:])
+        self.assertEqual(calls, [])
+
+    def test_only_after_a_checked_update(self):
+        block = _role_task('cmk_server_mngmt', 'main.yml',
+                           'Update the Site {{ cmk_site }} to {{ cmk_target }}')['block']
+        names = [task.get('name', '') for task in block]
+        self.assertEqual(names[-1], 'Bake agents after the site update')
+        self.assertTrue(names[-2].startswith('Fail when'))
 
     def test_appliance_bakes_too(self):
         tasks = _load(os.path.join(_ROLES, 'cmk_appliance_mngmt', 'tasks', 'main.yml'))
