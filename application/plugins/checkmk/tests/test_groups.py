@@ -322,7 +322,7 @@ class TestGroupRuleItems(unittest.TestCase):
         self.assertEqual(CheckmkGroupSync.rule_items(outcome, attributes),
                          ['ops', 'muc', 'ber'])
 
-    @patch('application.plugins.checkmk.groups.lookup_table_items')
+    @patch('application.plugins.checkmk.helpers.lookup_table_items')
     def test_rule_items_lookup_tables(self, mock_items):
         tables = {'teams': [('ops', {'name': 'ops'})], 'sites': None}
         mock_items.side_effect = tables.get
@@ -330,7 +330,7 @@ class TestGroupRuleItems(unittest.TestCase):
         self.assertEqual(CheckmkGroupSync.rule_items(outcome, ({}, {})),
                          [('ops', {'name': 'ops'})])
 
-    @patch('application.plugins.checkmk.groups.lookup_table_items')
+    @patch('application.plugins.checkmk.helpers.lookup_table_items')
     def test_rule_items_mixes_types(self, mock_items):
         mock_items.return_value = [('ops', {'team': 'ops'})]
         outcome = Mock(foreach_list=[Mock(foreach_type='label', foreach='team'),

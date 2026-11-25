@@ -324,6 +324,23 @@ foreach_types = [
  ('lookup', "Foreach Row of a Lookup Table"),
 ]
 
+class ForeachListMixin:  # pylint: disable=too-few-public-methods
+    """
+    Moves the single Foreach of a rule saved before the Foreach list
+    existed into that list, so such rules and their exports still load.
+    The class sets ``foreach_class``, the document of one list entry.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if (self.foreach_type or self.foreach) and not self.foreach_list:
+            entry_class = getattr(type(self), 'foreach_class')
+            self.foreach_list = [entry_class(foreach_type=self.foreach_type,
+                                             foreach=self.foreach)]
+        self.foreach_type = None
+        self.foreach = None
+
+
 class CmkGroupForeach(db.EmbeddedDocument):
     """
     One source of a group rule: its type and the names it reads.
@@ -336,7 +353,7 @@ class CmkGroupForeach(db.EmbeddedDocument):
     }
 
 
-class CmkGroupOutcome(db.EmbeddedDocument):
+class CmkGroupOutcome(ForeachListMixin, db.EmbeddedDocument):
     """
     ## Group Managment Options
 
@@ -371,25 +388,18 @@ class CmkGroupOutcome(db.EmbeddedDocument):
     """
     group_name = db.StringField(choices=cmk_groups)
     foreach_list = db.ListField(field=db.EmbeddedDocumentField(document_type="CmkGroupForeach"))
-    # The single Foreach of rules saved before the list existed. Kept so
-    # such rules and their exports still load; __init__ moves it into
-    # foreach_list.
+    # The single Foreach of rules saved before the list existed, moved
+    # into foreach_list on load (ForeachListMixin).
     foreach_type = db.StringField(choices=foreach_types)
     foreach = db.StringField(required=False)
     rewrite = db.StringField(default='{{name}}')
     rewrite_title = db.StringField(default='{{name}}')
 
+    foreach_class = CmkGroupForeach
+
     meta = {
         'strict': False,
     }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if (self.foreach_type or self.foreach) and not self.foreach_list:
-            self.foreach_list = [CmkGroupForeach(foreach_type=self.foreach_type,
-                                                 foreach=self.foreach)]
-        self.foreach_type = None
-        self.foreach = None
 
 
 class CheckmkGroupRule(db.Document):

@@ -9,10 +9,9 @@ from application.modules.rule.rule import Rule
 from application.plugins.checkmk.models import CheckmkGroupRule
 from application.plugins.checkmk.helpers import (
     collect_attribute_index,
-    foreach_attribute_items,
+    foreach_items,
     foreach_names,
     foreach_sources,
-    lookup_table_items,
 )
 
 from application.plugins.checkmk.models import CheckmkObjectCache
@@ -108,17 +107,7 @@ class CheckmkGroupSync(CMK2):
             if names:
                 db_filter &= Q(inventory__syncer_account__in=names)
             return [entry.hostname for entry in Host.objects(db_filter)]
-        items = []
-        for name in names:
-            if foreach_type == "lookup":
-                rows = lookup_table_items(name)
-                if rows is None:
-                    print(f"{CC.WARNING} *{CC.ENDC} Lookup Table {name} not found")
-                    continue
-                items += rows
-            else:
-                items += foreach_attribute_items(attributes, foreach_type, name)
-        return items
+        return foreach_items(attributes, foreach_type, foreach)
 
     # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     def export_cmk_groups(self, test_run):

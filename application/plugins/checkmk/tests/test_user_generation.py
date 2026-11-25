@@ -74,6 +74,9 @@ def make_outcome(**overrides):
         'disable_login': True,
     }
     defaults.update(overrides)
+    if 'foreach_list' not in overrides:
+        defaults['foreach_list'] = [Mock(foreach_type=defaults['foreach_type'],
+                                         foreach=defaults['foreach'])]
     outcome = Mock()
     for key, value in defaults.items():
         setattr(outcome, key, value)
@@ -377,6 +380,22 @@ class TestGroupSelection(_SyncerTestCase):
 
         self.assertEqual([x.name for x in groups], ['one-team'])
 
+    @patch('application.plugins.checkmk.helpers.lookup_table_items')
+    def test_several_sources_and_lookup_rows(self, mock_rows):
+        mock_rows.return_value = [('dba', {'team': 'dba', 'role': 'admin'}),
+                                  ('web', {'team': 'web', 'role': 'user'})]
+        index = ({'ldap_group': ['dba', 'linux'], 'extra': ['ops']}, {})
+        rule = make_rule(foreach_list=[
+            Mock(foreach_type='label', foreach='ldap_group, extra'),
+            Mock(foreach_type='lookup', foreach='teams')])
+
+        groups = self.syncer.group_names(rule, index)
+
+        # dba from the attribute comes first, its row is not used twice
+        self.assertEqual([x.name for x in groups], ['dba', 'linux', 'ops', 'web'])
+        self.assertEqual(groups[0].row, {})
+        self.assertEqual(groups[3].row, {'team': 'web', 'role': 'user'})
+
     def test_every_group_is_collected_once(self):
         index = ({'ldap_group': ['dba', 'dba', 'linux']}, {})
         self.assertEqual(
@@ -577,6 +596,30 @@ class TestCheckmkUserGeneration(_SyncerTestCase):
         # The searched name and the value the host carried
         self.assertEqual(mock_sync.call_args[0][1], 'grp-dba')
         self.assertEqual(mock_sync.call_args[0][3], 'dba')
+
+    def test_lookup_row_columns_reach_the_user_templates(self):
+        rule = make_rule('A', foreach_list=[Mock(foreach_type='lookup',
+                                                 foreach='teams')])
+        directory = {group_search(rule.outcome): {'dba': {'mail': 'dba@example.com',
+                                                          'role': 'from-ldap'}}}
+        with patch.object(self.syncer, 'sync_user') as mock_sync, \
+                patch.object(self.syncer, 'lookup_groups', return_value=directory), \
+                patch('application.plugins.checkmk.helpers.lookup_table_items',
+                      return_value=[('dba', {'team': 'dba', 'role': 'admin',
+                                             'pager': '123'})]), \
+                patch('application.plugins.checkmk.user_generation.Host'), \
+                patch('application.plugins.checkmk.user_generation'
+                      '.collect_attribute_index', return_value=({}, {})), \
+                patch('application.plugins.checkmk.user_generation'
+                      '.CheckmkUserGenerationRule') as mock_rules, \
+                patch('builtins.print'):
+            mock_rules.objects.return_value = [rule]
+            self.syncer.generate_users()
+
+        # Row columns are variables, the directory wins on the same name
+        self.assertEqual(mock_sync.call_args[0][2],
+                         {'team': 'dba', 'role': 'from-ldap', 'pager': '123',
+                          'mail': 'dba@example.com'})
 
     @patch('application.plugins.checkmk.user_generation.CheckmkUserMngmt')
     @patch('builtins.print')

@@ -9,6 +9,7 @@ carries the export rules and is at its size budget.
 # additional public methods to satisfy pylint.
 # pylint: disable=too-few-public-methods
 from application import db
+from application.plugins.checkmk.models import ForeachListMixin
 
 
 #   .-- Checkmk User Management
@@ -49,10 +50,23 @@ user_foreach_types = [
  ('label', "Foreach Attribute Name"),
  ('value', "Foreach Attribute Value"),
  ('list', "Foreach Value in List for given Attribute"),
+ ('lookup', "Foreach Row of a Lookup Table"),
 ]
 
 
-class CmkUserGenerationOutcome(db.EmbeddedDocument):
+class CmkUserForeach(db.EmbeddedDocument):
+    """
+    One source of group names: its type and the names it reads.
+    """
+    foreach_type = db.StringField(choices=user_foreach_types)
+    foreach = db.StringField(required=False)
+
+    meta = {
+        'strict': False,
+    }
+
+
+class CmkUserGenerationOutcome(ForeachListMixin, db.EmbeddedDocument):
     """
     One Checkmk User per LDAP Group your Hosts carry.
 
@@ -64,8 +78,7 @@ class CmkUserGenerationOutcome(db.EmbeddedDocument):
     """
     # Field order is form order: pick the groups, say where they are read,
     # then build the user out of what they carry.
-    foreach_type = db.StringField(choices=user_foreach_types)
-    foreach = db.StringField(required=False)
+    foreach_list = db.ListField(field=db.EmbeddedDocumentField(document_type="CmkUserForeach"))
     rewrite_group_name = db.StringField()
 
     ldap_account = db.StringField()
@@ -82,6 +95,13 @@ class CmkUserGenerationOutcome(db.EmbeddedDocument):
     roles = db.ListField(field=db.StringField(), default=['user'])
     contact_groups = db.ListField(field=db.StringField(), default=['all'])
     disable_login = db.BooleanField(default=True)
+
+    # The single Foreach of rules saved before the list existed, moved
+    # into foreach_list on load (ForeachListMixin).
+    foreach_type = db.StringField(choices=user_foreach_types)
+    foreach = db.StringField(required=False)
+
+    foreach_class = CmkUserForeach
 
     meta = {
         'strict': False,

@@ -615,8 +615,9 @@ def _render_user_generation_outcome(_view, _context, model, _name):
             <div class="card-body">
             <p class="card-text">
             <ul>
-            <li>Foreach: {escape(entry.foreach_type)}</li>
-            <li>Value: {escape(entry.foreach)}</li>
+            {''.join(f"<li>Foreach: {escape(source.foreach_type)}: "
+                     f"{escape(source.foreach)}</li>"
+                     for source in entry.foreach_list or [])}
             <li>Jinja User ID: {escape(entry.rewrite_user_id)}</li>
             <li>Jinja Full Name: {escape(entry.rewrite_full_name)}</li>
             <li>Jinja Mail: {escape(entry.rewrite_email)}</li>
@@ -645,8 +646,8 @@ class CheckmkUserGenerationRuleView(RuleModelView):
 
     form_subdocuments = {
         'outcome': {
+            'form_excluded_columns': ['foreach_type', 'foreach'],
             'form_overrides': {
-                'foreach': StringField,
                 'rewrite_group_name': StringField,
                 'rewrite_user_id': StringField,
                 'rewrite_full_name': StringField,
@@ -659,24 +660,19 @@ class CheckmkUserGenerationRuleView(RuleModelView):
                 'ldap_attributes': StringField,
             },
             'form_args': {
-                'foreach_type': {
+                'foreach_list': {
                     'label': '1. Where the group names sit',
                     'description': (
-                        'Attribute Name: your hosts carry something like'
-                        ' ldap_group: grp-dba \u2014 pick this one.'
-                        ' Attribute Value: they carry grp-dba: ldap_group.'
-                        ' Value in List: one attribute holds several'
-                        ' groups, comma separated.'
-                    ),
-                },
-                'foreach': {
-                    'label': '2. Name of that attribute',
-                    'description': (
-                        'For example ldap_group. A trailing * takes every'
-                        ' attribute starting with it, so ldap_group* also'
-                        ' reads ldap_group_second \u2014 with Value in List'
-                        ' as well, where the entries of all of them are'
-                        ' collected.'
+                        'One entry per source, all of them are read.'
+                        ' Attribute Name: your hosts carry something like'
+                        ' ldap_group: grp-dba \u2014 pick this one, with'
+                        ' ldap_group as name. Attribute Value: they carry'
+                        ' grp-dba: ldap_group. Value in List: one attribute'
+                        ' holds several groups, comma separated. Lookup'
+                        ' Table: the first column of every row is a group,'
+                        ' its columns are variables of the user fields.'
+                        ' Several names separated by comma; a trailing *'
+                        ' takes every attribute starting with it.'
                     ),
                 },
                 'rewrite_group_name': {
@@ -791,8 +787,21 @@ class CheckmkUserGenerationRuleView(RuleModelView):
                     ),
                 },
             },
+            'form_subdocuments': {
+                'foreach_list': {
+                    'form_subdocuments': {
+                        '': {
+                            'form_overrides': {
+                                'foreach': StringField,
+                            },
+                            'form_widget_args': {
+                                'foreach': {'placeholder': 'ldap_group'},
+                            },
+                        },
+                    },
+                },
+            },
             'form_widget_args': {
-                'foreach': {'placeholder': 'ldap_group'},
                 'rewrite_group_name': {'placeholder': '{{name}}'},
                 'ldap_base_dn': {'placeholder': 'ou=groups,dc=example,dc=com'},
                 'ldap_group_filter': {'placeholder': '(objectClass=group)'},
@@ -851,6 +860,13 @@ class CheckmkUserGenerationRuleView(RuleModelView):
         })
 
         super().__init__(model, **kwargs)
+
+    def create_form(self, obj=None):
+        """A new rule starts with one Foreach to fill in."""
+        form = super().create_form(obj)
+        if not form.outcome.foreach_list.entries:
+            form.outcome.foreach_list.append_entry()
+        return form
 
     def is_accessible(self):
         """ Overwrite """

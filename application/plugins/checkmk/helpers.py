@@ -203,3 +203,21 @@ def lookup_table_items(table):
         if name:
             items.append((name, row))
     return items
+
+
+def foreach_items(attribute_index, foreach_type, foreach):
+    """
+    The items of one Foreach over attributes or Lookup Tables, for every
+    name it lists. A Lookup Table row comes as ``(name, row)``.
+    """
+    items = []
+    for name in foreach_names(foreach):
+        if foreach_type == 'lookup':
+            rows = lookup_table_items(name)
+            if rows is None:
+                print(f"Lookup Table {name} not found")
+                continue
+            items += rows
+        else:
+            items += foreach_attribute_items(attribute_index, foreach_type, name)
+    return items

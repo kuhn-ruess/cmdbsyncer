@@ -9,7 +9,8 @@ from application.modules.rule.rule import Rule
 from application.helpers.get_account import get_account_by_name
 from application.plugins.checkmk.helpers import (
     collect_attribute_index,
-    foreach_attribute_items,
+    foreach_items,
+    foreach_sources,
 )
 from application.plugins.checkmk.user_models import (
     CheckmkUserGenerationRule,
@@ -37,8 +38,9 @@ GroupSearch = namedtuple(
 
 # One group a rule selected: the name that is searched in the directory
 # and the attribute value it was built from. A rewrite may have changed
-# the one, so both are Jinja variables of the user fields.
-SelectedGroup = namedtuple('SelectedGroup', 'name original')
+# the one, so both are Jinja variables of the user fields. `row` is the
+# Lookup Table row the group came from, empty for an attribute.
+SelectedGroup = namedtuple('SelectedGroup', 'name original row', defaults=[{}])
 
 
 def rewritten_group_name(template, value):
@@ -221,8 +223,10 @@ class CheckmkUserGeneration(Plugin):
                 continue
             groups = directory.get(search, {})
             for group in selected:
+                # The columns of a Lookup Table row are variables too,
+                # an attribute of the directory group wins over them.
                 user_id = self.sync_user(rule, group.name,
-                                         groups.get(group.name, {}),
+                                         {**group.row, **groups.get(group.name, {})},
                                          group.original)
                 if user_id:
                     generated.add(user_id)
@@ -260,8 +264,11 @@ class CheckmkUserGeneration(Plugin):
         template = getattr(outcome, 'rewrite_group_name', '')
         groups = []
         seen = set()
-        for item in foreach_attribute_items(attribute_index,
-                                            outcome.foreach_type, outcome.foreach):
+        items = []
+        for foreach_type, foreach in foreach_sources(outcome):
+            items += foreach_items(attribute_index, foreach_type, foreach)
+        for item in items:
+            item, row = item if isinstance(item, tuple) else (item, {})
             item = str(item).strip()
             name = rewritten_group_name(template, item) if template else item
             if not name:
@@ -270,7 +277,7 @@ class CheckmkUserGeneration(Plugin):
                 continue
             if name not in seen:
                 seen.add(name)
-                groups.append(SelectedGroup(name=name, original=item))
+                groups.append(SelectedGroup(name=name, original=item, row=row))
         return groups
 
     def lookup_groups(self, rule_groups):
@@ -433,7 +440,8 @@ class CheckmkUserGeneration(Plugin):
             groups = directory.get(search, {})
             for group in selected:
                 attributes = groups.get(group.name, {})
-                plan = self.plan_user(rule, group.name, attributes, group.original)
+                plan = self.plan_user(rule, group.name, {**group.row, **attributes},
+                                      group.original)
                 # Without an account no directory is asked at all, so the
                 # group is not "missing" — it simply has no attributes.
                 plan['searched'] = bool(search.account)
