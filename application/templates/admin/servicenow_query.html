@@ -216,15 +216,13 @@
     </div>
 
     {% if comparison.by_class %}
-    <div class="card app-card mb-4">
-        <div class="card-header">
-            ServiceNow names by class
-            <small class="text-muted ml-1">
-                <em>partly in the Syncer</em>: the class has names with and
-                without Syncer host
-            </small>
-        </div>
-        <div class="card-body p-0" style="max-height: 25rem; overflow-y: auto;">
+    <details class="mb-3" id="compare-by-class">
+        <summary>ServiceNow names by class ({{ comparison.by_class | length }})</summary>
+        <p class="text-muted small mb-1 mt-2">
+            <em>partly in the Syncer</em>: the class has names with and
+            without Syncer host
+        </p>
+        <div class="card app-card"><div class="table-scroll" style="max-height: 25rem; overflow-y: auto;">
             <table class="table table-sm table-striped mb-0">
                 <thead>
                     <tr><th>Class</th><th>With Syncer host</th>
@@ -246,14 +244,14 @@
                     {% endfor %}
                 </tbody>
             </table>
-        </div>
-    </div>
+        </div></div>
+    </details>
     {% endif %}
 
     {% for list in compare_lists if list.names %}
     <details class="mb-3" id="{{ list.id }}">
         <summary>{{ list.title }} ({{ list.names | length }})</summary>
-        <div class="card app-card mt-2" style="max-height: 25rem; overflow-y: auto;">
+        <div class="card app-card mt-2"><div class="table-scroll" style="max-height: 25rem; overflow-y: auto;">
             <table class="table table-sm mb-0">
                 <thead>
                     <tr><th>Name</th>
@@ -272,7 +270,7 @@
                     {% endfor %}
                 </tbody>
             </table>
-        </div>
+        </div></div>
     </details>
     {% endfor %}
     {% endif %}
