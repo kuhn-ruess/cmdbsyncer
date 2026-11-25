@@ -321,7 +321,20 @@ foreach_types = [
  ('value', "Foreach Attribute Value"),
  ('object', "Foreach Object from Account (empty for all)"),
  ('list', "Foreach Value in List for given Attribute"),
+ ('lookup', "Foreach Row of a Lookup Table"),
 ]
+
+class CmkGroupForeach(db.EmbeddedDocument):
+    """
+    One source of a group rule: its type and the names it reads.
+    """
+    foreach_type = db.StringField(choices=foreach_types)
+    foreach = db.StringField(required=False)
+
+    meta = {
+        'strict': False,
+    }
+
 
 class CmkGroupOutcome(db.EmbeddedDocument):
     """
@@ -330,15 +343,21 @@ class CmkGroupOutcome(db.EmbeddedDocument):
     ### Group Name
     You have to choose which kind of group you want to create
 
-    ### Foreach Type
+    ### Foreach
+    One or more sources, each with a Foreach Type and the names it reads.
+    All of them go through the same rewrites. A group name found twice
+    is created once, the first source wins.
 
-    Do you want to iterate over the Attribute Names, or Attribute Values.
+    Foreach Type: do you want to iterate over the Attribute Names, or Attribute Values.
     Example: if you have Attributes like: Firewall:service, DNS:service you wan't
     to use "Foreach Attribute". Is you strcture like service:Firewall, you wan't to go by Value.
+    "Foreach Row of a Lookup Table" creates one group per row of the table.
 
-    ### Foreach
     Name of the Attribute or Attribute Value we should search for.
-    Use * at the  end of the String, if you wan't to match all Strings beginning with this
+    Use * at the  end of the String, if you wan't to match all Strings beginning with this.
+    Several names can be given, separated by comma.
+    For a Lookup Table, give the name of the table. The first column is the {{name}},
+    every column can be used in the rewrites by its name.
 
     ### Rewrite (optional)
     You can rewrite the groups Name with Jinja Syntax
@@ -351,6 +370,10 @@ class CmkGroupOutcome(db.EmbeddedDocument):
     Otherwise use {{name}} as Placeholder for the seleted attribute.
     """
     group_name = db.StringField(choices=cmk_groups)
+    foreach_list = db.ListField(field=db.EmbeddedDocumentField(document_type="CmkGroupForeach"))
+    # The single Foreach of rules saved before the list existed. Kept so
+    # such rules and their exports still load; __init__ moves it into
+    # foreach_list.
     foreach_type = db.StringField(choices=foreach_types)
     foreach = db.StringField(required=False)
     rewrite = db.StringField(default='{{name}}')
@@ -359,6 +382,14 @@ class CmkGroupOutcome(db.EmbeddedDocument):
     meta = {
         'strict': False,
     }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if (self.foreach_type or self.foreach) and not self.foreach_list:
+            self.foreach_list = [CmkGroupForeach(foreach_type=self.foreach_type,
+                                                 foreach=self.foreach)]
+        self.foreach_type = None
+        self.foreach = None
 
 
 class CheckmkGroupRule(db.Document):

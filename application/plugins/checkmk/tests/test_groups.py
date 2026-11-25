@@ -5,6 +5,8 @@ Unit tests for checkmk groups module
 import unittest
 from unittest.mock import Mock, patch
 
+import jinja2
+
 from mongoengine.errors import DoesNotExist
 from application.plugins.checkmk.cmk2 import CmkException
 from application.plugins.checkmk.groups import CheckmkGroupSync
@@ -125,6 +127,41 @@ class TestCheckmkGroupSync(unittest.TestCase):
 
         self.assertEqual(len(groups['contact_groups']), 0)
 
+    def test_add_group_entries_same_name_once(self):
+        groups = {'contact_groups': []}
+        outcome = Mock(rewrite='', rewrite_title='{{alias}}')
+        with patch('application.plugins.checkmk.groups.render_jinja',
+                   lambda tpl, **kw: jinja2.Template(tpl).render(**kw)):
+            self.sync._add_group_entries(
+                items=['ops', ('ops', {'alias': 'Operations'}), 'dev'],
+                rewrite_name=False,
+                rewrite_title=True,
+                outcome=outcome,
+                group_type='contact_groups',
+                groups=groups,
+                str_replace=lambda x, exc: x,
+                replace_exceptions=['-', '_'],
+            )
+        self.assertEqual([name for _title, name in groups['contact_groups']],
+                         ['ops', 'dev'])
+
+    @patch('application.plugins.checkmk.groups.render_jinja',
+           lambda tpl, **kw: jinja2.Template(tpl).render(**kw))
+    def test_add_group_entries_lookup_row_columns(self):
+        groups = {'contact_groups': []}
+        outcome = Mock(rewrite='cg_{{name}}', rewrite_title='{{alias}}')
+        self.sync._add_group_entries(
+            items=[('ops', {'team': 'ops', 'alias': 'Operations'})],
+            rewrite_name=True,
+            rewrite_title=True,
+            outcome=outcome,
+            group_type='contact_groups',
+            groups=groups,
+            str_replace=lambda x, exc: x,
+            replace_exceptions=['-', '_'],
+        )
+        self.assertEqual(groups['contact_groups'], [('Operations', 'cg_ops')])
+
     @patch('application.plugins.checkmk.groups.Host')
     def test_parse_attributes(self, mock_host):
         mock_db_host1 = Mock()
@@ -190,8 +227,7 @@ class TestCheckmkGroupSync(unittest.TestCase):
         """A group Checkmk refuses to delete must not abort the export."""
         outcome = Mock()
         outcome.group_name = 'host_groups'
-        outcome.foreach_type = 'label'
-        outcome.foreach = 'site'
+        outcome.foreach_list = [Mock(foreach_type='label', foreach='site')]
         outcome.rewrite = None
         outcome.rewrite_title = None
         rule = Mock()
@@ -234,8 +270,7 @@ class TestCheckmkGroupSync(unittest.TestCase):
         Checkmk currently has for it."""
         outcome = Mock()
         outcome.group_name = 'host_groups'
-        outcome.foreach_type = 'label'
-        outcome.foreach = 'site'
+        outcome.foreach_list = [Mock(foreach_type='label', foreach='site')]
         outcome.rewrite = None
         outcome.rewrite_title = rewrite_title
         rule = Mock()
@@ -276,6 +311,33 @@ class TestCheckmkGroupSync(unittest.TestCase):
 
     def test_matching_alias_sends_nothing(self):
         self.assertEqual(self._run_alias_export('muc'), [])
+
+
+class TestGroupRuleItems(unittest.TestCase):
+    """The items the Foreach sources of a group rule yield"""
+
+    def test_rule_items_several_attributes(self):
+        outcome = Mock(foreach_list=[Mock(foreach_type='label', foreach='team, location')])
+        attributes = ({'team': ['ops'], 'location': ['muc', 'ber']}, {})
+        self.assertEqual(CheckmkGroupSync.rule_items(outcome, attributes),
+                         ['ops', 'muc', 'ber'])
+
+    @patch('application.plugins.checkmk.groups.lookup_table_items')
+    def test_rule_items_lookup_tables(self, mock_items):
+        tables = {'teams': [('ops', {'name': 'ops'})], 'sites': None}
+        mock_items.side_effect = tables.get
+        outcome = Mock(foreach_list=[Mock(foreach_type='lookup', foreach='teams,sites')])
+        self.assertEqual(CheckmkGroupSync.rule_items(outcome, ({}, {})),
+                         [('ops', {'name': 'ops'})])
+
+    @patch('application.plugins.checkmk.groups.lookup_table_items')
+    def test_rule_items_mixes_types(self, mock_items):
+        mock_items.return_value = [('ops', {'team': 'ops'})]
+        outcome = Mock(foreach_list=[Mock(foreach_type='label', foreach='team'),
+                                     Mock(foreach_type='lookup', foreach='teams')])
+        attributes = ({'team': ['ops', 'dev']}, {})
+        self.assertEqual(CheckmkGroupSync.rule_items(outcome, attributes),
+                         ['ops', 'dev', ('ops', {'team': 'ops'})])
 
 
 if __name__ == '__main__':

@@ -171,3 +171,35 @@ def foreach_attribute_items(attribute_index, foreach_type, foreach):
             items += get_list(entry)
         return items
     return []
+
+
+def foreach_names(foreach):
+    """
+    The names a "Foreach" field lists, comma separated. One rule can so
+    read several attributes, accounts or lookup tables at once.
+    """
+    return [name.strip() for name in (foreach or '').split(',') if name.strip()]
+
+
+def foreach_sources(outcome):
+    """The ``(foreach_type, foreach)`` pairs of a group rule, in order."""
+    return [(entry.foreach_type, entry.foreach)
+            for entry in outcome.foreach_list or []]
+
+
+def lookup_table_items(table):
+    """
+    One ``(name, row)`` pair per row of the lookup table ``table``: the
+    first column is the name, the row carries every column for Jinja.
+    None when there is no such table.
+    """
+    # pylint: disable=import-outside-toplevel
+    from application.helpers.lookup_table import lookup_keys, lookup_rows
+    if lookup_keys(table) is None:
+        return None
+    items = []
+    for row in lookup_rows(table):
+        name = next(iter(row.values()), '')
+        if name:
+            items.append((name, row))
+    return items

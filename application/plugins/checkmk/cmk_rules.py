@@ -16,7 +16,9 @@ from application import app, logger
 from application.models.host import Host
 from application.plugins.checkmk.cmk2 import CmkException, CmkTimeout, CMK2
 from application.helpers.syncer_jinja import render_jinja, get_list
-from application.plugins.checkmk.helpers import make_progress, resolve_loop_list
+from application.plugins.checkmk.helpers import (
+    foreach_names, foreach_sources, make_progress, resolve_loop_list,
+)
 from application.modules.rule.list_source import (
     is_list_rule,
     parse_rule_list,
@@ -695,53 +697,31 @@ def preview_group_rule_for_attributes(rule, attributes):
             'note': 'This group rule has no outcome configured.',
         }]
 
-    foreach = outcome.foreach or ''
-    foreach_type = outcome.foreach_type or ''
     group_type = outcome.group_name or ''
 
-    if foreach_type == 'object':
-        return [{
-            'title': f"{group_type} ({foreach_type})",
-            'meta': f"foreach={foreach!r}",
-            'rows': [],
-            'note': ("foreach_type='object' iterates Account-objects across "
-                     "all hosts — this preview only inspects a single host, "
-                     "so the per-host outcome is not meaningful here. The "
-                     "export will create one group per matching object."),
-        }]
+    items, notes = _group_sources_for_host(outcome, group_type, attributes)
 
-    items = _collect_group_items_for_host(foreach_type, foreach, attributes)
-
-    if not items:
+    if not items and not notes:
+        sources = ', '.join(f"{source_type}={names!r}"
+                            for source_type, names in foreach_sources(outcome))
         return [{
-            'title': f"{group_type} ({foreach_type})",
-            'meta': f"foreach={foreach!r}",
+            'title': group_type,
+            'meta': f"foreach: {sources}",
             'rows': [],
-            'note': (f"No matching items on this host for "
-                     f"foreach_type={foreach_type!r}, foreach={foreach!r} "
+            'note': (f"No matching items on this host for {sources or 'no Foreach'} "
                      f"— this rule would not contribute a group for this host."),
         }]
 
     render = _safe_render_factory(dict(attributes))
-    results = []
+    results = notes
+    seen = set()
     for item in items:
         rows = [('source_item', str(item))]
-        if outcome.rewrite:
-            try:
-                rendered_name = render_jinja(
-                    outcome.rewrite, name=item, result=item, **attributes)
-            except Exception as exp:  # pylint: disable=broad-except
-                rendered_name = f"!! render error: {type(exp).__name__}: {exp}"
-        else:
-            rendered_name = str(item)
-        if outcome.rewrite_title:
-            try:
-                rendered_title = render_jinja(
-                    outcome.rewrite_title, name=item, result=item, **attributes)
-            except Exception as exp:  # pylint: disable=broad-except
-                rendered_title = f"!! render error: {type(exp).__name__}: {exp}"
-        else:
-            rendered_title = str(item)
+        rendered_name = _render_group_field(outcome.rewrite, item, attributes)
+        rendered_title = _render_group_field(outcome.rewrite_title, item, attributes)
+        if rendered_name in seen:
+            continue
+        seen.add(rendered_name)
         rows.append(('group_name', rendered_name))
         rows.append(('group_title', rendered_title))
         # Reuse `render` so attribute-driven rewrites stay consistent
@@ -750,11 +730,47 @@ def preview_group_rule_for_attributes(rule, attributes):
 
         results.append({
             'title': f"{group_type}: {rendered_name}",
-            'meta': f"foreach_type={foreach_type}",
+            'meta': f"group_type={group_type}",
             'rows': rows,
             'note': None,
         })
     return results
+
+
+def _group_sources_for_host(outcome, group_type, attributes):
+    """
+    The items the Foreach sources of a group rule yield for one host,
+    and a note for each source that does not read the host.
+    """
+    # Sources that do not read the host only get a note; the attribute
+    # sources of the same rule are still evaluated for this host.
+    notes = []
+    items = []
+    for source_type, source_names in foreach_sources(outcome):
+        if source_type in ('object', 'lookup'):
+            source = 'Account-objects' if source_type == 'object' else 'Lookup Table rows'
+            notes.append({
+                'title': f"{group_type} ({source_type})",
+                'meta': f"foreach={source_names!r}",
+                'rows': [],
+                'note': (f"foreach_type={source_type!r} iterates {source}, not "
+                         "the attributes of a host. This preview only inspects a "
+                         "single host, so the per-host outcome is not meaningful "
+                         "here. The export will create one group per entry."),
+            })
+        else:
+            items += _collect_group_items_for_host(source_type, source_names, attributes)
+    return items, notes
+
+
+def _render_group_field(template, item, attributes):
+    """A group rewrite for one item, the item itself without a template."""
+    if not template:
+        return str(item)
+    try:
+        return render_jinja(template, name=item, result=item, **attributes)
+    except Exception as exp:  # pylint: disable=broad-except
+        return f"!! render error: {type(exp).__name__}: {exp}"
 
 
 def _collect_group_items_for_host(foreach_type, foreach, attributes):
@@ -765,16 +781,18 @@ def _collect_group_items_for_host(foreach_type, foreach, attributes):
     aggregate across every host; for a per-host preview we only look
     at this host's labels / inventory.
     """
-    if not foreach:
-        return []
-
     collectors = {
         'value': _collect_group_items_value,
         'label': _collect_group_items_label,
         'list': _collect_group_items_list,
     }
     collect = collectors.get(foreach_type)
-    return collect(foreach, attributes) if collect else []
+    if not collect:
+        return []
+    items = []
+    for name in foreach_names(foreach):
+        items += collect(name, attributes)
+    return items
 
 
 def _collect_group_items_value(foreach, attributes):

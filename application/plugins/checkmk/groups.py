@@ -10,6 +10,9 @@ from application.plugins.checkmk.models import CheckmkGroupRule
 from application.plugins.checkmk.helpers import (
     collect_attribute_index,
     foreach_attribute_items,
+    foreach_names,
+    foreach_sources,
+    lookup_table_items,
 )
 
 from application.plugins.checkmk.models import CheckmkObjectCache
@@ -62,19 +65,60 @@ class CheckmkGroupSync(CMK2):
     # pylint: disable=too-many-arguments,too-many-positional-arguments,line-too-long,redefined-outer-name
     def _add_group_entries(self, items, rewrite_name, rewrite_title, outcome, group_type, groups, str_replace, replace_exceptions):
         """
-        Hilfsfunktion zum Hinzufügen von Gruppen-Einträgen
+        Add one group per item. An item is a name, or a ``(name, row)``
+        pair from a lookup table whose columns the rewrites can use.
         """
         for item in items:
+            item, row = item if isinstance(item, tuple) else (item, {})
+            variables = {**row, 'row': row, 'name': item, 'result': item}
             new_group_title = item
             new_group_name = item
             if rewrite_name:
-                new_group_name = render_jinja(outcome.rewrite, name=item, result=item)
+                new_group_name = render_jinja(outcome.rewrite, **variables)
             new_group_name = str_replace(new_group_name, replace_exceptions).strip()
             if rewrite_title:
-                new_group_title = render_jinja(outcome.rewrite_title, name=item, result=item)
+                new_group_title = render_jinja(outcome.rewrite_title, **variables)
             new_group_title = str_replace(new_group_title, replace_exceptions).strip()
-            if new_group_name and (new_group_title, new_group_name) not in groups[group_type]:
+            # One group per name: the first rule or Foreach giving it wins.
+            if new_group_name and new_group_name not in \
+                    [name for _title, name in groups[group_type]]:
                 groups[group_type].append((new_group_title, new_group_name))
+
+    @staticmethod
+    def rule_items(outcome, attributes):
+        """
+        The items every Foreach of a rule yields, for every name it lists.
+        """
+        items = []
+        for foreach_type, foreach in foreach_sources(outcome):
+            items += CheckmkGroupSync.source_items(foreach_type, foreach, attributes)
+        return items
+
+    @staticmethod
+    def source_items(foreach_type, foreach, attributes):
+        """
+        The items of one Foreach: its type and the names it lists.
+        """
+        names = foreach_names(foreach)
+        if foreach_type == "object":
+            # Outbound — only ship objects whose lifecycle is active
+            # and that are not soft-deleted.
+            db_filter = Host.active_q() & Q(deleted_at__exists=False) & \
+                Q(is_object=True) & Q(object_type__ne='template')
+            if names:
+                db_filter &= Q(inventory__syncer_account__in=names)
+            return [entry.hostname for entry in Host.objects(db_filter)]
+        items = []
+        for name in names:
+            if foreach_type == "lookup":
+                rows = lookup_table_items(name)
+                if rows is None:
+                    print(f"{CC.WARNING} *{CC.ENDC} Lookup Table {name} not found")
+                    continue
+                items += rows
+            else:
+                items += foreach_attribute_items(attributes, foreach_type, name)
+        return items
 
     # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     def export_cmk_groups(self, test_run):
@@ -97,19 +141,7 @@ class CheckmkGroupSync(CMK2):
                 rewrite_name = True
             if outcome.rewrite_title:
                 rewrite_title = True
-            if outcome.foreach_type == "object":
-                # Outbound — only ship objects whose lifecycle is active
-                # and that are not soft-deleted.
-                db_filter = Host.active_q() & Q(deleted_at__exists=False) & \
-                    Q(is_object=True) & Q(object_type__ne='template')
-                object_filter = outcome.foreach
-                if object_filter:
-                    db_filter &= Q(inventory__syncer_account=object_filter)
-                items = [entry.hostname for entry in Host.objects(db_filter)]
-            else:
-                items = foreach_attribute_items(attributes,
-                                                outcome.foreach_type,
-                                                outcome.foreach)
+            items = self.rule_items(outcome, attributes)
             self._add_group_entries(
                 items,
                 rewrite_name,

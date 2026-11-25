@@ -609,8 +609,8 @@ class PluginViewFormattingTest(unittest.TestCase):
         model = SimpleNamespace(
             outcome=SimpleNamespace(
                 group_name='<img src=x onerror=alert(1)>',
-                foreach_type='<b>host</b>',
-                foreach='<script>alert(2)</script>',
+                foreach_list=[SimpleNamespace(foreach_type='<b>host</b>',
+                                              foreach='<script>alert(2)</script>')],
                 rewrite='{{ bad|safe }}',
                 rewrite_title='<svg onload=alert(3)>',
             )

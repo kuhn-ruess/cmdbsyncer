@@ -294,8 +294,9 @@ def _render_group_outcome(_view, _context, model, _name):
             </p>
             <p class="card-text">
             <ul>
-            <li>Foreach: {escape(entry.foreach_type)}</li>
-            <li>Value: {escape(entry.foreach)}</li>
+            {''.join(f"<li>Foreach: {escape(source.foreach_type)}: "
+                     f"{escape(source.foreach)}</li>"
+                     for source in entry.foreach_list or [])}
             <li>Jinja Name Rewrite: {escape(entry.rewrite)}</li>
             <li>Jinja Title Rewrite: {escape(entry.rewrite_title)}</li>
             </ul>
@@ -498,6 +499,13 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
         html.append('</ul></div></div>')
     return Markup(''.join(html))
 
+FOREACH_PLACEHOLDER = (
+    'Name of Attribute, Attribute Value or Lookup Table, '
+    'depending on Foreach Type. You can use *. '
+    'Several names separated by comma'
+)
+
+
 class CheckmkGroupRuleView(RuleModelView):
     """
     Custom Group Model View
@@ -510,21 +518,32 @@ class CheckmkGroupRuleView(RuleModelView):
 
     form_subdocuments = {
         'outcome': {
+            'form_excluded_columns': ['foreach_type', 'foreach'],
             'form_overrides': {
-                'foreach': StringField,
                 'rewrite': StringField,
                 'rewrite_title': StringField,
             },
             'form_widget_args': {
-                'foreach': {
-                    'placeholder': (
-                        'Name of Attribute or Attribute Value, '
-                        'depending on Foreach Type. You can use *'
-                    )
-                },
                 'rewrite': {'placeholder': '{{name}}'},
                 'rewrite_title': {'placeholder': '{{name}}'},
-            }
+            },
+            'form_args': {
+                'foreach_list': {'label': 'Foreach'},
+            },
+            'form_subdocuments': {
+                'foreach_list': {
+                    'form_subdocuments': {
+                        '': {
+                            'form_overrides': {
+                                'foreach': StringField,
+                            },
+                            'form_widget_args': {
+                                'foreach': {'placeholder': FOREACH_PLACEHOLDER},
+                            },
+                        },
+                    },
+                },
+            },
         },
     }
 
@@ -568,6 +587,13 @@ class CheckmkGroupRuleView(RuleModelView):
         })
 
         super().__init__(model, **kwargs)
+
+    def create_form(self, obj=None):
+        """A new rule starts with one Foreach to fill in."""
+        form = super().create_form(obj)
+        if not form.outcome.foreach_list.entries:
+            form.outcome.foreach_list.append_entry()
+        return form
 
     def is_accessible(self):
         """ Overwrite """

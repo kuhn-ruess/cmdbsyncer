@@ -2865,6 +2865,10 @@ def _group_outcome(**fields):
         'rewrite_title': '',
     }
     defaults.update(fields)
+    sources = [(defaults.pop('foreach_type'), defaults.pop('foreach'))]
+    sources += defaults.pop('more', [])
+    defaults['foreach_list'] = [SimpleNamespace(foreach_type=source_type, foreach=names)
+                                for source_type, names in sources]
     return SimpleNamespace(**defaults)
 
 
@@ -2910,7 +2914,35 @@ class TestPreviewGroupRule(unittest.TestCase):
         result = preview_group_rule_for_attributes(
             rule, {'HOSTNAME': 'srv01'})
         self.assertEqual(len(result), 1)
-        self.assertIn('across', result[0]['note'])
+        self.assertIn('Account-objects', result[0]['note'])
+
+    def test_lookup_foreach_marked_as_not_per_host(self):
+        rule = SimpleNamespace(
+            outcome=_group_outcome(foreach_type='lookup', foreach='teams'))
+        result = preview_group_rule_for_attributes(
+            rule, {'HOSTNAME': 'srv01'})
+        self.assertEqual(len(result), 1)
+        self.assertIn('Lookup Table rows', result[0]['note'])
+
+    def test_foreach_list_mixes_note_and_host_items(self):
+        rule = SimpleNamespace(outcome=_group_outcome(
+            foreach_type='label', foreach='environment, role',
+            more=[('lookup', 'teams'), ('label', 'stage')]))
+        result = preview_group_rule_for_attributes(
+            rule, {'HOSTNAME': 'srv01', 'environment': 'prod',
+                   'role': 'web', 'stage': 'prod'})
+        self.assertIn('Lookup Table rows', result[0]['note'])
+        names = [dict(o['rows'])['group_name'] for o in result[1:]]
+        self.assertEqual(names, ['prod', 'web'])
+
+    def test_several_labels_comma_separated(self):
+        rule = SimpleNamespace(
+            outcome=_group_outcome(foreach_type='label',
+                                   foreach='environment, role'))
+        result = preview_group_rule_for_attributes(
+            rule, {'HOSTNAME': 'srv01', 'environment': 'prod', 'role': 'web'})
+        names = sorted(dict(o['rows'])['group_name'] for o in result)
+        self.assertEqual(names, ['prod', 'web'])
 
     def test_value_foreach_collects_keys(self):
         rule = SimpleNamespace(
