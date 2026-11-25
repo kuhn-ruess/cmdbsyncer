@@ -1,0 +1,41 @@
+---
+# Bake the agents after the update of the central site, so the agent
+# packages carry the new version. Only the site marked in the syncer gets
+# cmk_bake_agents, the bakery runs on the central site. With a bakery key
+# the packages are signed too, which the agent updater needs.
+# Right after the start the site may not answer yet: retried while there
+# is no answer or a 502/503.
+- name: "Bake agents on {{ cmk_site }}"
+  vars:
+    cmk_bake_signed: "{{ (cmk_bakery_key_id | default('') | trim) != '' }}"
+  ansible.builtin.uri:
+    url: "{{ cmk_main_server_full }}/check_mk/api/1.0/domain-types/agent/actions/{{ 'bake_and_sign' if cmk_bake_signed | bool else 'bake' }}/invoke"
+    method: POST
+    status_code: [200, 204]
+    validate_certs: no
+    url_username: "{{ cmk_user }}"
+    url_password: "{{ cmk_secret }}"
+    force_basic_auth: true
+    headers:
+      Accept: "application/json"
+      Content-Type: "application/json"
+    body_format: json
+    body: "{{ {'key_id': cmk_bakery_key_id | int, 'passphrase': cmk_bakery_passphrase | default('')} if cmk_bake_signed | bool else {} }}"
+  no_log: true
+  delegate_to: localhost
+  register: bake_result
+  until: (bake_result.status | default(-1)) not in [-1, 502, 503]
+  retries: 6
+  delay: 10
+  ignore_errors: true
+
+# no_log hides the answer, status and reason of Checkmk carry no secrets
+- name: "Baking the agents on {{ cmk_site }} failed"
+  ansible.builtin.fail:
+    msg: >-
+      The site is updated, but Checkmk did not bake the agents on
+      {{ cmk_main_server_full }}: HTTP {{ bake_result.status | default('no answer') }}
+      {{ (bake_result.json | default({})).get('title', '') }}
+      {{ (bake_result.json | default({})).get('detail', '') }}
+      {{ '' if bake_result.json is defined else (bake_result.msg | default('') | truncate(300)) }}
+  when: bake_result is failed

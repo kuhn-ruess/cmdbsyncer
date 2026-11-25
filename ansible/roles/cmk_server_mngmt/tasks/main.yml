@@ -191,3 +191,9 @@
       {{ (update_reasons[-8:] if update_reasons else update_output[-5:]) | join(' / ') }}
       {{ '(to update past a failed pre-flight check, set the Ansible variable cmk_preflight=ignore for this site)' if cmk_preflight == 'abort' else '' }}
   when: site_update is not skipped and site_update.rc != 0
+
+- name: "Bake agents after the site update"
+  ansible.builtin.include_tasks: bake_agents.yml
+  when:
+    - cmk_bake_agents | default(false) | bool
+    - site_update is changed

@@ -1524,6 +1524,18 @@ class CheckmkSiteView(DefaultModelView):
         'enabled',
     ]
 
+    form_args = {
+        'bake_agents_after_update': {
+            'label': 'Bake Agents after the Update',
+            'description': (
+                'Set it on the central site only, the agent bakery runs there. '
+                'After a successful update the playbook bakes the agents through '
+                'the Checkmk API of the Site Settings, signed when they have a '
+                'bakery key.'
+            ),
+        },
+    }
+
     form_rules = modern_form(
         section('1', 'main', 'Basics',
                 'Name of the Checkmk site, description and activation.',
@@ -1534,7 +1546,8 @@ class CheckmkSiteView(DefaultModelView):
                 'Server address and the Site Settings template to '
                 'inherit (edition, version, certs, …).',
                 [rules.Field('server_address'),
-                 rules.Field('settings_master')]),
+                 rules.Field('settings_master'),
+                 rules.Field('bake_agents_after_update')]),
         section('3', 'out', 'Ansible Overrides',
                 'Per-site custom Ansible variables applied on top of '
                 'the Site Settings defaults.',
@@ -1844,6 +1857,18 @@ class CheckmkSettingsView(DefaultModelView):
                 " (with site, or {{ACCOUNT:x:address}})"
             ),
         },
+        'bakery_key_id': {
+            'placeholder': (
+                "Optional: ID of the agent signature key, to sign the baked"
+                " agents. You can use {{ACCOUNT:x:bakery_key_id}}"
+            ),
+        },
+        'bakery_passphrase': {
+            'placeholder': (
+                "Passphrase of the signature key"
+                " ({{ACCOUNT:x:bakery_passphrase}})"
+            ),
+        },
         'webserver_certificate': {
             'placeholder': (
                 "Optional: Add Paths to your Webserver Certificate Files "
@@ -1876,10 +1901,13 @@ class CheckmkSettingsView(DefaultModelView):
                      rules.Field('inital_password')]),
             section('3', 'out', 'Checkmk API',
                     'Optional: credentials + API address for automated '
-                    'downtimes / status reads.',
+                    'downtimes / status reads, and the bakery key for the '
+                    'site that bakes the agents after its update.',
                     [rules.Field('cmk_user'),
                      rules.Field('cmk_secret'),
-                     rules.Field('cmk_server_address')]),
+                     rules.Field('cmk_server_address'),
+                     rules.Field('bakery_key_id'),
+                     rules.Field('bakery_passphrase')]),
             section('4', 'cond', 'Before the Update: Call a URL',
                     'Optional, e.g. for a VM snapshot: before a site is updated '
                     'the playbook POSTs the body to the URL, from the Syncer '

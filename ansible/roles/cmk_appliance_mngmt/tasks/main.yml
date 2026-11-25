@@ -164,4 +164,14 @@
     systemctl start "omd@$site.service"
   args:
     executable: /bin/bash
+  register: site_update
   when: server_site_version.stdout != cmk_version+"."+cmk_edition
+
+# The same step as on an OMD server
+- name: "Bake agents after the site update"
+  ansible.builtin.include_role:
+    name: cmk_server_mngmt
+    tasks_from: bake_agents.yml
+  when:
+    - cmk_bake_agents | default(false) | bool
+    - site_update is changed

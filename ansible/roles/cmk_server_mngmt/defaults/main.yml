@@ -8,3 +8,7 @@ cmk_agent_host_name: "{{ inventory_hostname }}"
 # the update, or ignore it and update anyway, e.g. with deprecated
 # check_http rules that are migrated by hand later.
 cmk_preflight: abort
+
+# Set by the syncer for the central site with "Bake Agents after the
+# Update": the agents are baked after its update.
+cmk_bake_agents: false

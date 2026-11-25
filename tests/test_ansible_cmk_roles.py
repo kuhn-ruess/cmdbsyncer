@@ -14,6 +14,7 @@ when Ansible is not installed.
 # pylint: disable=missing-function-docstring
 import base64
 import glob
+import http.server
 import json
 import os
 import re
@@ -21,6 +22,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from datetime import datetime, timedelta, timezone
 
@@ -529,6 +531,100 @@ class InstalledVersionTest(unittest.TestCase):
 
     def test_no_omd_yet(self):
         self.assertEqual(self._missing(''), 'True')
+
+
+class _FakeCheckmk(http.server.BaseHTTPRequestHandler):
+    """Records the calls and answers with the status of the server."""
+
+    def do_POST(self):  # pylint: disable=invalid-name
+        length = int(self.headers.get('Content-Length') or 0)
+        self.server.calls.append({'path': self.path,
+                                  'auth': self.headers.get('Authorization'),
+                                  'body': json.loads(self.rfile.read(length) or '{}')})
+        self.send_response(self.server.status)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        if self.server.status != 204:
+            self.wfile.write(json.dumps({'title': 'Unauthorized',
+                                         'detail': 'Wrong credentials'}).encode())
+
+    def log_message(self, *_args):  # pylint: disable=arguments-differ
+        pass
+
+
+@unittest.skipUnless(_ansible_playbook(), 'ansible-playbook not installed')
+class BakeAgentsTest(unittest.TestCase):
+    """The central site bakes the agents after its update, signed with a
+    bakery key, through the Checkmk API of the settings."""
+
+    def _run(self, status=204, **variables):
+        server = http.server.HTTPServer(('127.0.0.1', 0), _FakeCheckmk)
+        server.calls, server.status = [], status
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        role_tasks = _load(os.path.join(_ROLES, 'cmk_server_mngmt', 'tasks', 'main.yml'))
+        task = [task for task in role_tasks
+                if task.get('name') == 'Bake agents after the site update'][0]
+        task['ansible.builtin.include_tasks'] = os.path.join(
+            _ROLES, 'cmk_server_mngmt', 'tasks', 'bake_agents.yml')
+        play = [{'hosts': 'all', 'gather_facts': False, 'tasks': [task], 'vars': dict({
+            'cmk_site': 'central', 'cmk_user': USER, 'cmk_secret': SECRET,
+            'cmk_main_server_full': f'http://127.0.0.1:{server.server_port}/central',
+            'site_update': {'changed': True}, 'cmk_bake_agents': True}, **variables)}]
+        with open(os.path.join(tmp, 'play.yml'), 'w', encoding='utf-8') as handle:
+            yaml.safe_dump(play, handle, allow_unicode=True)
+        env = dict(os.environ, ANSIBLE_NOCOLOR='1',
+                   ANSIBLE_LOCAL_TEMP=os.path.join(tmp, 'local'),
+                   ANSIBLE_REMOTE_TEMP=os.path.join(tmp, 'remote'))
+        proc = subprocess.run(
+            [_ansible_playbook(), '-i', 'srv01,', '-c', 'local',
+             '-e', f'ansible_python_interpreter={sys.executable}',
+             os.path.join(tmp, 'play.yml')],
+            stdin=subprocess.DEVNULL, capture_output=True, text=True, env=env,
+            timeout=300, check=False)
+        return proc, server.calls
+
+    def test_signed_with_key(self):
+        proc, calls = self._run(cmk_bakery_key_id='2', cmk_bakery_passphrase=SECRET)
+        self.assertEqual(proc.returncode, 0, proc.stdout[-2000:])
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]['path'], '/central/check_mk/api/1.0/domain-types/agent/'
+                                           'actions/bake_and_sign/invoke')
+        self.assertEqual(calls[0]['body'], {'key_id': 2, 'passphrase': SECRET})
+        self.assertEqual(calls[0]['auth'], 'Basic ' + base64.b64encode(
+            f'{USER}:{SECRET}'.encode()).decode())
+        self.assertNotIn(SECRET, proc.stdout)
+
+    def test_baked_without_key(self):
+        proc, calls = self._run(cmk_bakery_key_id='')
+        self.assertEqual(proc.returncode, 0, proc.stdout[-2000:])
+        self.assertEqual(calls[0]['path'], '/central/check_mk/api/1.0/domain-types/agent/'
+                                           'actions/bake/invoke')
+
+    def test_refused_bake_fails_with_reason(self):
+        proc, calls = self._run(status=401, cmk_bakery_key_id='2',
+                                cmk_bakery_passphrase=SECRET)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(len(calls), 1)
+        self.assertIn('did not bake the agents', proc.stdout)
+        self.assertIn('HTTP 401 Unauthorized Wrong credentials', proc.stdout)
+        self.assertNotIn(SECRET, proc.stdout)
+
+    def test_only_after_an_update_of_the_marked_site(self):
+        for variables in ({'site_update': {'changed': False}}, {'cmk_bake_agents': False}):
+            proc, calls = self._run(**variables)
+            self.assertEqual(proc.returncode, 0, proc.stdout[-2000:])
+            self.assertEqual(calls, [], variables)
+
+    def test_appliance_bakes_too(self):
+        tasks = _load(os.path.join(_ROLES, 'cmk_appliance_mngmt', 'tasks', 'main.yml'))
+        self.assertEqual(tasks[-2]['register'], 'site_update')
+        self.assertEqual(tasks[-1]['ansible.builtin.include_role'],
+                         {'name': 'cmk_server_mngmt', 'tasks_from': 'bake_agents.yml'})
 
 
 if __name__ == '__main__':

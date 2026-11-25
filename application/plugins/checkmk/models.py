@@ -790,6 +790,9 @@ class CheckmkSettings(db.Document):
     cmk_user = db.StringField()
     cmk_secret = db.StringField()
     cmk_server_address = db.StringField()
+    # Key of the agent bakery, for the sites that bake after their update
+    bakery_key_id = db.StringField()
+    bakery_passphrase = db.StringField()
 
     # Called before the update of a site, a VM snapshot for example: the
     # update of that server goes on only after a successful answer. See
@@ -870,8 +873,8 @@ class CheckmkSite(db.Document):
             db.ListField(field=db.EmbeddedDocumentField(document_type="AnsibleVariable"))
 
     enabled = db.BooleanField()
-
-
+    # The central site bakes the agents after its update
+    bake_agents_after_update = db.BooleanField(default=False)
 
     meta = {
         'strict': False,

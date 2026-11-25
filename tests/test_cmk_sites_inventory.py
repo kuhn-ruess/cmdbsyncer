@@ -86,5 +86,25 @@ class SitesOfSettingsTest(unittest.TestCase):
             self.assertFalse(self._syncer(MagicMock()).get_host_inventory('srv09'))
 
 
+
+class BakeAgentsTest(unittest.TestCase):
+    """Only the site marked as central gets the bake step and the key."""
+
+    def test_unmarked_site_does_not_bake(self):
+        site = MagicMock(bake_agents_after_update=False)
+        self.assertEqual(site_syncer.SyncSites.bake_agents(site), {})
+
+    def test_marked_site_gets_the_key(self):
+        site = MagicMock(bake_agents_after_update=True)
+        site.settings_master.bakery_key_id = ' {{ACCOUNT:bakery:key}} '
+        site.settings_master.bakery_passphrase = '{{ACCOUNT:bakery:password}}'
+        rendered = {' {{ACCOUNT:bakery:key}} ': ' 2 ',
+                    '{{ACCOUNT:bakery:password}}': 'secret'}
+        with patch.object(site_syncer, 'render_jinja', side_effect=rendered.get):
+            self.assertEqual(site_syncer.SyncSites.bake_agents(site), {
+                'cmk_bake_agents': True, 'cmk_bakery_key_id': '2',
+                'cmk_bakery_passphrase': 'secret'})
+
+
 if __name__ == '__main__':
     unittest.main()

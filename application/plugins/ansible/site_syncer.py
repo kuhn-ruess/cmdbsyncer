@@ -85,6 +85,7 @@ class SyncSites(Plugin):
         custom_vars = {var.variable_name: var.variable_value
                        for var in site.custom_ansible_variables}
         inventory.update(self.pre_update_call(site, custom_vars))
+        inventory.update(self.bake_agents(site))
         inventory.update(custom_vars)
         return inventory
 
@@ -114,6 +115,21 @@ class SyncSites(Plugin):
             'cmk_pre_update_success_field': (settings.pre_update_success_field or "").strip(),
             'cmk_pre_update_success_value': (settings.pre_update_success_value or "").strip(),
             'cmk_pre_update_timeout': settings.pre_update_timeout or 600,
+        }
+
+    @staticmethod
+    def bake_agents(site):
+        """
+        Only the site marked as central bakes after its update, the bakery
+        runs there. With a key id the agents are signed too.
+        """
+        if not site.bake_agents_after_update:
+            return {}
+        settings = site.settings_master
+        return {
+            'cmk_bake_agents': True,
+            'cmk_bakery_key_id': render_jinja(settings.bakery_key_id or "").strip(),
+            'cmk_bakery_passphrase': render_jinja(settings.bakery_passphrase or ""),
         }
 
     def get_full_inventory(self):
