@@ -3,8 +3,3 @@
 # site update. Override it per host with an Ansible custom variable when
 # the Checkmk host name differs from the inventory name.
 cmk_agent_host_name: "{{ inventory_hostname }}"
-
-# What a failed pre-flight check of omd update does on Checkmk 2.5: abort
-# the update, or ignore it and update anyway, e.g. with deprecated
-# check_http rules that are migrated by hand later.
-cmk_preflight: abort

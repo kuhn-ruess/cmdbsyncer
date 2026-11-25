@@ -308,9 +308,9 @@ _FAKE_OMD = """#!/bin/bash
 echo "omd $*" >> "$OMD_CALLS"
 case "$*" in
   *update*)
-    [ "$OMD_UPDATE_OK" = 1 ] && exit 0
+    [ "$OMD_UPDATE" = ok ] && echo "Finished update." && exit 0
+    [ "$OMD_UPDATE" = noop ] && exit 0
     echo "-| Incompatible local file '/omd/sites/mysite/local/share/check_mk/web/plugins/pages/x.py'."
-    echo "-| WARNING: A valid and non expired license is needed before updating."
     echo "-| Abort the update process? [A/c]"
     exit 1;;
 esac
@@ -319,10 +319,10 @@ esac
 
 @unittest.skipUnless(_ansible_playbook(), 'ansible-playbook not installed')
 class SiteUpdateResultTest(unittest.TestCase):
-    """A failed omd update fails the run with its reasons, and the site is
-    started again; before, the run passed and the site kept its version."""
+    """The run passes only when omd prints "Finished update", the check of
+    the Checkmk Ansible collection. The site is started again either way."""
 
-    def _run(self, update_ok, preflight='abort'):
+    def _run(self, update):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
         os.mkdir(os.path.join(tmp, 'bin'))
@@ -339,12 +339,11 @@ class SiteUpdateResultTest(unittest.TestCase):
         play = [{'hosts': 'all', 'gather_facts': False, 'tasks': tasks, 'vars': {
             'cmk_site': 'mysite', 'cmk_version': '2.5.0p19', 'cmk_edition': 'pro',
             'server_site_version': {'stdout': '2.4.0p20.pro'},
-            'site_just_installed': {'changed': False}, 'cmk_preflight': preflight}}]
+            'site_just_installed': {'changed': False}}}]
         with open(os.path.join(tmp, 'play.yml'), 'w', encoding='utf-8') as handle:
             yaml.safe_dump(play, handle)
         calls = os.path.join(tmp, 'calls')
-        env = dict(os.environ, ANSIBLE_NOCOLOR='1', OMD_CALLS=calls,
-                   OMD_UPDATE_OK='1' if update_ok else '0',
+        env = dict(os.environ, ANSIBLE_NOCOLOR='1', OMD_CALLS=calls, OMD_UPDATE=update,
                    PATH=os.path.join(tmp, 'bin') + os.pathsep + os.environ['PATH'],
                    ANSIBLE_LOCAL_TEMP=os.path.join(tmp, 'local'),
                    ANSIBLE_REMOTE_TEMP=os.path.join(tmp, 'remote'))
@@ -357,31 +356,30 @@ class SiteUpdateResultTest(unittest.TestCase):
         with open(calls, encoding='utf-8') as handle:
             return proc, handle.read().splitlines()
 
-    def test_failed_update_fails_with_reasons_and_starts_the_site(self):
-        proc, calls = self._run(update_ok=False)
+    def test_failed_update_fails_with_output_and_starts_the_site(self):
+        proc, calls = self._run('fail')
         self.assertNotEqual(proc.returncode, 0)
-        self.assertIn('failed (exit code 1), the site runs on its old version again: '
-                      "Incompatible local file '/omd/sites/mysite/local/share/check_mk/"
-                      "web/plugins/pages/x.py'. / WARNING: A valid and non expired license "
-                      'is needed before updating.', proc.stdout)
-        self.assertIn('set the Ansible variable cmk_preflight=ignore', proc.stdout)
+        self.assertIn("did not finish: -| Incompatible local file", proc.stdout)
         self.assertEqual(calls[-1], 'omd start mysite')
+
+    def test_update_without_finish_fails(self):
+        proc, _calls = self._run('noop')
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn('did not finish', proc.stdout)
 
     def test_update_passes(self):
-        proc, calls = self._run(update_ok=True)
+        proc, calls = self._run('ok')
         self.assertEqual(proc.returncode, 0, proc.stdout[-2000:])
-        self.assertIn('--pre-flight=abort', calls[1])
-        self.assertEqual(calls[-1], 'omd start mysite')
+        self.assertEqual(calls, ['omd stop mysite',
+                                 'omd -f -V 2.5.0p19.pro update --conflict=install mysite',
+                                 'omd start mysite'])
 
-    def test_preflight_can_be_ignored(self):
-        proc, calls = self._run(update_ok=True, preflight='ignore')
-        self.assertEqual(proc.returncode, 0, proc.stdout[-2000:])
-        self.assertIn('--pre-flight=ignore', calls[1])
-
-    def test_default_is_abort(self):
-        defaults = _load(os.path.join(_ROLES, 'cmk_server_mngmt', 'defaults', 'main.yml'))
-        self.assertEqual(defaults['cmk_preflight'], 'abort')
-
+    def test_no_preflight_switch(self):
+        with open(os.path.join(_ROLES, 'cmk_server_mngmt', 'tasks', 'main.yml'),
+                  encoding='utf-8') as handle:
+            tasks = handle.read()
+        self.assertIn('update --conflict=install', tasks)
+        self.assertNotIn('--pre-flight', tasks)
 
 @unittest.skipUnless(_ansible_playbook(), 'ansible-playbook not installed')
 class InstalledVersionTest(unittest.TestCase):
