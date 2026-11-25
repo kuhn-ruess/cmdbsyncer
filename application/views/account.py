@@ -4,7 +4,7 @@ Account Model View
 # pylint: disable=fixme
 import re
 
-from flask import flash, redirect, request, url_for
+from flask import flash, g, redirect, request, url_for
 from markupsafe import Markup, escape
 from mongoengine.errors import OperationError
 from mongoengine.errors import ValidationError as ModelValidationError
@@ -16,7 +16,7 @@ from flask_admin.model.fields import InlineFieldList
 from wtforms import SelectField, StringField
 from wtforms.validators import Optional, ValidationError
 from application import plugin_register
-from application.models.cron import CronGroup, job_account
+from application.models.cron import CronGroup, job_account, job_account_id
 from application.views.default import DefaultModelView, name_and_enabled_filters
 from application.views._form_sections import modern_form, section
 from application.models.account import CustomEntry, Account, account_restrictions
@@ -343,6 +343,31 @@ def _render_type(_view, _context, model, _name):
                   f'data-label="{escape(labels.get(value, value))}">{escape(value)}</span>')
 
 
+def accounts_in_cron():
+    """Ids of the accounts a cron job names, once per request"""
+    if 'accounts_in_cron' not in g:
+        g.accounts_in_cron = {job_account_id(job)
+                              for group in CronGroup.objects().only('jobs')
+                              for job in group.jobs}
+    return g.accounts_in_cron
+
+
+def without_cron(model):
+    """An account with a role is meant to run, but no cron job runs it"""
+    return bool(model.restrict_to) and str(model.id) not in accounts_in_cron()
+
+
+_NO_CRON = 'In no cron job'
+
+
+def _render_role(_view, _context, model, _name):
+    """The role, with a warning when no cron job uses the account"""
+    html = escape(dict(account_restrictions).get(model.restrict_to or '', ''))
+    if without_cron(model):
+        html += Markup(f' <span class="badge badge-warning">{_NO_CRON}</span>')
+    return Markup(html)
+
+
 def child_name(model):
     """
     A name for a child account saved without one: the parent and its
@@ -377,6 +402,7 @@ def child_rows():
             'enabled': bool(child.enabled),
             'role': roles.get(child.restrict_to or '', ''),
             'jobs': list(child.account_jobs or []),
+            'no_cron': without_cron(child),
             'edit': url_for('account_childs.edit_view', id=str(child.id), url=back),
         })
     return rows
@@ -395,6 +421,8 @@ class ChildAccountModelView(_SourceViewMixin, DefaultModelView):
     column_exclude_list = [
             'custom_fields', 'is_child', 'type',
             'is_master', 'address', 'username', 'password', 'auto_apply_templates']
+
+    column_formatters = {'restrict_to': _render_role}
 
     column_filters = name_and_enabled_filters()
 
@@ -646,6 +674,7 @@ class AccountModelView(_SourceViewMixin, DefaultModelView):
         'password': _render_custom_data,
         'plugin_settings': _render_plugin_data,
         'type': _render_type,
+        'restrict_to': _render_role,
     }
 
     form_overrides = {

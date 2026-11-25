@@ -71,6 +71,7 @@
       var meta = [];
       if (child.role) meta.push(child.role);
       if (child.jobs.length) meta.push('Jobs: ' + child.jobs.join(', '));
+      if (child.no_cron) meta.push('in no cron job');
       if (!child.enabled) meta.push('disabled');
       if (meta.length) {
         var note = document.createElement('span');

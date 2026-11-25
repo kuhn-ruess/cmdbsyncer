@@ -13,14 +13,15 @@ from tests.web_smoke_helpers import HAVE_MONGOMOCK, SKIP_REASON, run_against_app
 SNIPPET = '''
 from wtforms.validators import ValidationError
 
-from application import cron_register
+from application import app, cron_register
 from application.helpers.cron import import_register
 from application.helpers.account_jobs import (ACCOUNT_JOBS_JOB, AccountJobsError,
                                               creates, run_account_jobs)
 from application.helpers.plugins import plugin_jobs
 from application.models.account import Account, PluginSettings
 from application.models.cron import CronGroup, GroupEntry
-from application.views.account import _check_jobs, _store_inventory_key, child_name
+from application.views.account import (_check_jobs, _store_inventory_key, child_name,
+                                       without_cron)
 from application.views.cron import _account_cell, _check_account_jobs
 
 calls = []
@@ -194,7 +195,16 @@ child_body = check(
 if 'account-import-fields' not in child_body or 'account_jobs-0' not in child_body \\
         or 'account-inventory-key' not in child_body:
     fail('child form without import fields or jobs')
+CronGroup(name='runs_export', jobs=[GroupEntry(
+    name='job', command=ACCOUNT_JOBS_JOB,
+    account=Account.objects.get(name='export'))]).save()
+with app.test_request_context():
+    eq(without_cron(Account.objects.get(name='export')), False, 'account in a cron job')
+    eq(without_cron(Account.objects.get(name='csv_add')), True, 'role, no cron job')
+    eq(without_cron(Account.objects.get(name='csv_none')), False, 'no role')
 listing = check('/admin/account/', 200).get_data(as_text=True)
+if 'In no cron job' not in listing or '"no_cron": true' not in listing:
+    fail('account list without the hint for accounts in no cron job')
 for marker in ('"jdisc_own"', 'Add child account', f'data-id="{jdisc.id}"'):
     if marker not in listing:
         fail(f'account list without {marker}')
