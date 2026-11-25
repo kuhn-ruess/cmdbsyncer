@@ -17,9 +17,10 @@
   #    tags:
   #      - always
 
+    # omd prints "Uninstalling" for every version it removes
     - name: "Cleanup old CMK Installations"
-      become: True
-      ansible.builtin.shell: |
-        omd cleanup
-      args:
-        executable: /bin/bash
+      become: true
+      ansible.builtin.command:
+        argv: [omd, cleanup]
+      register: omd_cleanup
+      changed_when: "'Uninstalling' in omd_cleanup.stdout"

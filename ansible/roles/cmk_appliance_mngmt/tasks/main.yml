@@ -71,6 +71,10 @@
   environment: "{{ {'https_proxy': download_proxy, 'http_proxy': download_proxy} if (download_proxy | default('') | trim) else {} }}"
   when: not installation_file.stat.exists
   delegate_to: localhost
+  register: installer_download
+  until: installer_download is not failed
+  retries: 3
+  delay: 10
 
 - name: "Check if the Version is already installed"
   ansible.builtin.stat:

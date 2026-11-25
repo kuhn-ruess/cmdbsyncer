@@ -16,7 +16,7 @@
     src: "{{ webserver_certificate }}"
     dest: /etc/ssl/checkmk/certificate.pem
     follow: true
-    mode: "0755"
+    mode: "0644"
     owner: root
     group: root
   when:
@@ -29,7 +29,7 @@
     src: "{{ webserver_private_certificate }}"
     dest: /etc/ssl/checkmk/private.pem
     follow: true
-    mode: "0755"
+    mode: "0600"
     owner: root
     group: root
   when:
@@ -42,7 +42,7 @@
     src: "{{ webserver_intermediate_certificate }}"
     dest: /etc/ssl/checkmk/intermediate.pem
     follow: true
-    mode: "0755"
+    mode: "0644"
     owner: root
     group: root
   when:
