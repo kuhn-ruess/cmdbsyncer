@@ -116,3 +116,39 @@ class TestSavedTables(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestClassNames(unittest.TestCase):
+    """The names of one class on a page of their own"""
+
+    def test_a_class_is_selected_by_its_id(self):
+        self.assertEqual(views.class_query('cmdb_ci_linux_server'),
+                         'sys_class_name=cmdb_ci_linux_server')
+
+    def test_records_without_class_can_be_selected(self):
+        self.assertEqual(views.class_query(''), 'sys_class_nameISEMPTY')
+
+    def _page(self, args, by_class):
+        view = View.__new__(View)
+        asked = []
+
+        def query(form, _limit, compare=False):
+            asked.append((form['sysparm_query'], compare))
+            return {'by_class': by_class}
+        view._query = query  # pylint: disable=protected-access
+        view.render = lambda template, **context: context
+        with Flask(__name__).test_request_context('/?' + urlencode(args)):
+            return View.class_names.__wrapped__(view), asked
+
+    def test_only_the_class_is_read_with_the_query_of_the_form(self):
+        entry = {'class': 'cmdb_ci_linux_server', 'names': [{'name': 'srv01', 'host': True}]}
+        context, asked = self._page({'account': 'snow', 'table': 'cmdb_ci',
+                                     'sysparm_query': 'operational_status=1',
+                                     'class_id': 'cmdb_ci_linux_server'}, [entry])
+        self.assertEqual(asked, [('sys_class_name=cmdb_ci_linux_server^operational_status=1',
+                                  True)])
+        self.assertEqual(context['entry'], entry)
+
+    def test_a_class_without_records_shows_none(self):
+        context, _ = self._page({'account': 'snow', 'table': 'cmdb_ci', 'class_id': 'x'}, [])
+        self.assertEqual(context['entry']['names'], [])

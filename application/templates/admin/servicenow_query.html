@@ -219,25 +219,31 @@
     <details class="mb-3" id="compare-by-class">
         <summary>ServiceNow names by class ({{ comparison.by_class | length }})</summary>
         <p class="text-muted small mb-1 mt-2">
-            <em>partly in the Syncer</em>: the class has names with and
-            without Syncer host
+            Most names first. A click on a class opens its names in a new
+            window. <em>partly in the Syncer</em>: the class
+            has names with and without Syncer host.
         </p>
         <div class="card app-card"><div class="table-scroll" style="max-height: 25rem; overflow-y: auto;">
             <table class="table table-sm table-striped mb-0">
                 <thead>
-                    <tr><th>Class</th><th>With Syncer host</th>
-                        <th>Without Syncer host</th></tr>
+                    <tr><th>Class</th><th>Class id</th><th>Names</th>
+                        <th>With Syncer host</th><th>Without Syncer host</th></tr>
                 </thead>
                 <tbody>
                     {% for row in comparison.by_class %}
                     <tr>
                         <td>
-                            {%- if row['class'] -%}{{ row['class'] }}
-                            {%- else -%}<em class="text-muted">no class</em>{%- endif -%}
+                            <a href="{{ url_for('.class_names', class_id=row['class'], **class_args) }}"
+                               target="_blank" title="Show the names of this class in a new window">
+                            {%- if row.label -%}{{ row.label }}
+                            {%- else -%}<em>no class</em>{%- endif -%}
+                            <i class="fa fa-external-link ml-1"></i></a>
                             {% if row.matched and row.extra %}
                             <span class="badge badge-info ml-1">partly in the Syncer</span>
                             {% endif %}
                         </td>
+                        <td>{% if row['class'] %}<code>{{ row['class'] }}</code>{% endif %}</td>
+                        <td>{{ row.total }}</td>
                         <td>{{ row.matched }}</td>
                         <td>{{ row.extra }}</td>
                     </tr>

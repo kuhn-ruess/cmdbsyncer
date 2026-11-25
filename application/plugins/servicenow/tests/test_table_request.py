@@ -169,7 +169,7 @@ class TestImportOneRecordAsSeveralHosts(unittest.TestCase):
         instance = syncer(tables='cmdb_ci_server', id='acc1', name='SNOW',
                           rewrite_hostname='{{ [HOSTNAME, HOSTNAME + "-rtr"] }}')
         instance.log_details = []
-        instance.get_table = lambda table, query=None, fields=None: iter(
+        instance.get_table = lambda table, query=None, fields=None, **_: iter(
             [{'name': 's1', 'ip_address': '10.0.0.10'}])
         instance.flatten_record = dict
         with patch.object(snow.Host, 'rewrite_hostname', create=True,
@@ -312,7 +312,7 @@ class TestImportHosts(unittest.TestCase):
         instance = syncer(tables='cmdb_ci_unix_server, cmdb_ci_db_instance')
         instance.log_details = []
         read = []
-        instance.get_table = lambda table, query=None, fields=None: read.append(table) or []
+        instance.get_table = lambda table, query=None, fields=None, **_: read.append(table) or []
         instance.import_hosts()
         self.assertEqual(read, ['cmdb_ci_unix_server', 'cmdb_ci_db_instance'])
 
@@ -376,7 +376,7 @@ class TestCompareHosts(unittest.TestCase):
         instance = syncer(**config)
         asked = []
 
-        def get_table(_table, query=None, fields=None):  # pylint: disable=unused-argument
+        def get_table(_table, query=None, fields=None, display=None):  # pylint: disable=unused-argument
             asked.append(fields)
             return records
         instance.get_table = get_table
@@ -386,7 +386,7 @@ class TestCompareHosts(unittest.TestCase):
         instance = syncer()
         read = {'cmdb_ci_linux_server': [{'name': 'srv01', 'sys_class_name': 'linux'}],
                 'cmdb_ci_win_server': [{'name': 'srv02', 'sys_class_name': 'win'}]}
-        instance.get_table = lambda table, query=None, fields=None: read[table]
+        instance.get_table = lambda table, query=None, fields=None, **_: read[table]
         result = instance.compare_hosts('cmdb_ci_linux_server, cmdb_ci_win_server',
                                         ['srv01', 'srv02'])
         self.assertEqual(result['records'], 2)
@@ -451,11 +451,49 @@ class TestCompareHosts(unittest.TestCase):
              {'name': 'pc01', 'sys_class_name': 'Computer'},
              {'name': 'win01', 'sys_class_name': 'Windows Server'}],
             ['srv01', 'win01'])
-        self.assertEqual(result['by_class'], [
-            {'class': 'Linux Server', 'matched': 1, 'extra': 2},
-            {'class': 'Computer', 'matched': 0, 'extra': 1},
-            {'class': 'Windows Server', 'matched': 1, 'extra': 0},
+        self.assertEqual([(x['class'], x['matched'], x['extra'], x['total'])
+                          for x in result['by_class']], [
+            ('Linux Server', 1, 2, 3),
+            ('Computer', 0, 1, 1),
+            ('Windows Server', 1, 0, 1),
         ])
+        # The names of a class, the ones with a Syncer host first
+        self.assertEqual(result['by_class'][0]['names'], [
+            {'name': 'srv01', 'host': True},
+            {'name': 'srv02', 'host': False},
+            {'name': 'srv03', 'host': False}])
+
+    def test_the_classes_come_with_id_and_name(self):
+        def both(value, display):
+            return {'value': value, 'display_value': display}
+        records = [
+            {'name': both('srv01', 'srv01'),
+             'sys_class_name': both('cmdb_ci_linux_server', 'Linux Server')},
+            {'name': both('srv02', 'srv02'),
+             'sys_class_name': both('cmdb_ci_linux_server', 'Linux Server')},
+            {'name': both('srv03', 'srv03'),
+             'sys_class_name': both('cmdb_ci_win_server', 'Windows Server')}]
+        instance = syncer()
+        asked = []
+
+        def get_table(_table, query=None, fields=None, display=None):  # pylint: disable=unused-argument
+            asked.append(display)
+            return records
+        instance.get_table = get_table
+        result = instance.compare_hosts('cmdb_ci', ['srv01'])
+        self.assertEqual(asked, ['all'])
+        self.assertEqual(result['params']['sysparm_display_value'], 'all')
+        self.assertEqual([(x['class'], x['label'], x['total']) for x in result['by_class']],
+                         [('cmdb_ci_linux_server', 'Linux Server', 2),
+                          ('cmdb_ci_win_server', 'Windows Server', 1)])
+        self.assertEqual(result['matched'], [{'name': 'srv01', 'class': 'Linux Server'}])
+
+    def test_raw_values_name_the_host_when_the_account_reads_them(self):
+        instance = syncer(sysparm_display_value='false', hostname_field='cmdb_ci')
+        instance.get_table = lambda table, query=None, fields=None, **_: [
+            {'cmdb_ci': {'value': 'abc123', 'display_value': 'srv01'}}]
+        result = instance.compare_hosts('cmdb_ci', [])
+        self.assertEqual([x['name'] for x in result['missing_in_syncer']], ['abc123'])
 
 
 class TestInventorizeTables(unittest.TestCase):
@@ -504,7 +542,7 @@ class TestRecordHosts(unittest.TestCase):
     @staticmethod
     def _with_relations(*relations):
         instance = syncer()
-        instance.get_table = lambda table, query=None, fields=None: iter(
+        instance.get_table = lambda table, query=None, fields=None, **_: iter(
             [{'parent': parent, 'child': child, 'type': 'Contains::Contained by'}
              for parent, child in relations])
         return instance
@@ -537,20 +575,20 @@ class TestRelationIndex(unittest.TestCase):
         # Whether the host is the parent or the child depends on the
         # relation type, so neither side may be the only one indexed
         instance = syncer()
-        instance.get_table = lambda table, query=None, fields=None: iter(self.RELATIONS)
+        instance.get_table = lambda table, query=None, fields=None, **_: iter(self.RELATIONS)
         index = instance.relation_index()
         self.assertEqual(index['ldom-s02-ora'], {'ldom-s02'})
         self.assertEqual(index['ldom-s02'], {'LDOM-S02-ORA'})
 
     def test_a_half_empty_relation_is_ignored(self):
         instance = syncer()
-        instance.get_table = lambda table, query=None, fields=None: iter(self.RELATIONS)
+        instance.get_table = lambda table, query=None, fields=None, **_: iter(self.RELATIONS)
         self.assertEqual(len(instance.relation_index()), 4)
 
     def test_the_table_is_read_once_per_inventorized_table(self):
         instance = syncer()
         reads = []
-        instance.get_table = lambda table, query=None, fields=None: \
+        instance.get_table = lambda table, query=None, fields=None, **_: \
             reads.append(table) or iter(self.RELATIONS)
         instance.relation_index('cmdb_ci_db_instance')
         instance.relation_index('cmdb_ci_db_instance')
@@ -578,7 +616,7 @@ class TestRelationIndex(unittest.TestCase):
         instance = syncer()
         queries = []
 
-        def read(table, query=None, fields=None):  # pylint: disable=unused-argument
+        def read(table, query=None, fields=None, display=None):  # pylint: disable=unused-argument
             queries.append(query)
             return iter(self.RELATIONS if len(queries) > 1 else [])
 
@@ -594,7 +632,7 @@ class TestRelationIndex(unittest.TestCase):
         instance = syncer()
         queries = []
 
-        def read(table, query=None, fields=None):  # pylint: disable=unused-argument
+        def read(table, query=None, fields=None, display=None):  # pylint: disable=unused-argument
             queries.append(query)
             return iter([] if query else self.RELATIONS)
 
@@ -627,7 +665,7 @@ class TestInventorizeData(unittest.TestCase):
                           inventorize_tables='cmdb_ci_network_adapter:cmdb_ci',
                           **config)
         instance.log_details = []
-        instance.get_table = lambda table, query=None, fields=None: iter(self.ADAPTERS)
+        instance.get_table = lambda table, query=None, fields=None, **_: iter(self.ADAPTERS)
         with patch.object(snow, 'run_inventory') as run:
             instance.inventorize_data()
         return run
@@ -651,7 +689,7 @@ class TestInventorizeData(unittest.TestCase):
                           inventorize_tables='cmdb_ci_db_instance:rel')
         instance.log_details = []
         reads = []
-        instance.get_table = lambda table, query=None, fields=None: \
+        instance.get_table = lambda table, query=None, fields=None, **_: \
             reads.append(table) or iter([])
         with patch.object(snow, 'run_inventory'):
             instance.inventorize_data()
@@ -667,7 +705,7 @@ class TestInventorizeData(unittest.TestCase):
                              'type': 'Contains::Contained by'}],
             'cmdb_ci_db_instance': [{'name': 'LDOM-S02-ORA', 'version': '19c'}],
         }
-        instance.get_table = lambda table, query=None, fields=None: iter(tables[table])
+        instance.get_table = lambda table, query=None, fields=None, **_: iter(tables[table])
         with patch.object(snow, 'run_inventory') as run:
             instance.inventorize_data()
         _config, objects = run.call_args[0]
@@ -680,7 +718,7 @@ class TestInventorizeData(unittest.TestCase):
         instance = syncer(inventorize_key='snow',
                           inventorize_tables='cmdb_ci_network_adapter:cmdb_ci')
         instance.log_details = []
-        instance.get_table = lambda table, query=None, fields=None: iter(self.ADAPTERS)
+        instance.get_table = lambda table, query=None, fields=None, **_: iter(self.ADAPTERS)
         with patch.object(snow, 'run_inventory'):
             instance.inventorize_data()
         self.assertIn(('cmdb_ci_network_adapter_records_without_ci', 1),
@@ -753,7 +791,7 @@ class TestInventorizeQuery(unittest.TestCase):
         instance.log_details = []
         calls = []
 
-        def read(table, query=None, fields=None):  # pylint: disable=unused-argument
+        def read(table, query=None, fields=None, display=None):  # pylint: disable=unused-argument
             calls.append((query, fields))
             return iter([{'name': 'eth0', 'cmdb_ci': 'srv01'}])
 
@@ -768,7 +806,7 @@ class TestInventorizeQuery(unittest.TestCase):
         instance.log_details = []
         queries = []
 
-        def read(table, query=None, fields=None):  # pylint: disable=unused-argument
+        def read(table, query=None, fields=None, display=None):  # pylint: disable=unused-argument
             queries.append(query)
             return iter([] if len(queries) == 1 else [{'name': 'eth0', 'cmdb_ci': 'srv01'}])
 
@@ -821,7 +859,7 @@ class TestHostLookup(unittest.TestCase):
         # The relation names the CI, the import created the host with
         # the domain appended
         instance = syncer(hosts={'ldom-s02': ['ldom-s02.munich-airport.de']})
-        instance.get_table = lambda table, query=None, fields=None: iter(
+        instance.get_table = lambda table, query=None, fields=None, **_: iter(
             [{'parent': 'LDOM-S02-ORA', 'child': 'ldom-s02',
               'type': 'Contains::Contained by'}])
         self.assertEqual(instance.record_hosts({'name': 'LDOM-S02-ORA'}, 'rel'),

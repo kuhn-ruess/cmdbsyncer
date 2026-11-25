@@ -1,0 +1,68 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container mt-4">
+    <h3>
+        ServiceNow class
+        {% if entry and entry.label %}{{ entry.label }}{% else %}<em>no class</em>{% endif %}
+        {% if class_id %}<code class="ml-1">{{ class_id }}</code>{% endif %}
+    </h3>
+    <p class="text-muted">
+        Account <strong>{{ form.account }}</strong>, table
+        <code>{{ form.table }}</code>, query <code>{{ form.sysparm_query }}</code>.
+        The names are compared with the hosts an export of the Syncer would
+        send, the same way as in the comparison.
+    </p>
+
+    {% if error %}
+    <div class="alert alert-danger">
+        <i class="fa fa-exclamation-triangle"></i> <span style="white-space: pre-line;">{{ error }}</span>
+    </div>
+    {% endif %}
+
+    {% if entry %}
+    <div class="form-row align-items-center mb-3">
+        <div class="col-md-4">
+            <input type="search" class="form-control" id="name_filter"
+                   placeholder="Filter names" autofocus/>
+        </div>
+        <div class="col-md-8">
+            <span class="badge badge-secondary">{{ entry.total }} name(s)</span>
+            <span class="badge badge-success ml-1">{{ entry.matched }} with Syncer host</span>
+            <span class="badge badge-warning ml-1">{{ entry.extra }} without Syncer host</span>
+        </div>
+    </div>
+
+    <div class="card app-card">
+            <table class="table table-sm table-striped mb-0">
+                <thead>
+                    <tr><th>Name</th><th>Syncer host</th></tr>
+                </thead>
+                <tbody>
+                    {% for name in entry.names %}
+                    <tr class="class-name" data-name="{{ name.name | lower }}">
+                        <td>
+                            {%- if name.host -%}
+                            <a href="{{ url_for('host.debug', hostname=name.name) }}">{{ name.name }}</a>
+                            {%- else -%}{{ name.name }}{%- endif -%}
+                        </td>
+                        <td>
+                            {%- if name.host -%}<span class="badge badge-success">yes</span>
+                            {%- else -%}<span class="badge badge-warning">no</span>{%- endif -%}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+    </div>
+    <script>
+        document.getElementById('name_filter').addEventListener('input', function () {
+            var term = this.value.trim().toLowerCase();
+            document.querySelectorAll('.class-name').forEach(function (row) {
+                row.hidden = term !== '' && row.dataset.name.indexOf(term) === -1;
+            });
+        });
+    </script>
+    {% endif %}
+</div>
+{% endblock %}

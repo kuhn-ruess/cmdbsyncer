@@ -90,33 +90,65 @@ RELATION_MATCH = 'rel'
 CLASS_FIELD = 'sys_class_name'
 
 
-def compare_names(in_snow, classes, hostnames):
+def compare_names(in_snow, classes, hostnames, class_labels=None):
     """
     The number of Syncer hosts, the names found on both sides and on
     one side only, each with the classes of its ServiceNow records, and
-    the count per class.
-    `in_snow` and `classes` are keyed by the lower case name.
+    per class its names and how many of them have a Syncer host.
+    `in_snow` and `classes` are keyed by the lower case name, `classes`
+    holds the class ids, `class_labels` their display names.
     """
+    class_labels = class_labels or {}
     in_syncer = {name.lower(): name for name in hostnames}
     per_class = {}
     for key, found in classes.items():
         status = 'matched' if key in in_syncer else 'extra'
-        for name in found:
-            counts = per_class.setdefault(name, {'class': name, 'matched': 0, 'extra': 0})
-            counts[status] += 1
+        for class_id in found:
+            entry = per_class.setdefault(class_id, {
+                'class': class_id, 'label': class_labels.get(class_id) or class_id,
+                'matched': 0, 'extra': 0, 'names': []})
+            entry[status] += 1
+            entry['names'].append({'name': in_syncer.get(key) or in_snow[key],
+                                   'host': status == 'matched'})
+    for entry in per_class.values():
+        entry['total'] = entry['matched'] + entry['extra']
+        entry['names'].sort(key=lambda x: (not x['host'], x['name'].lower()))
 
     def entries(keys, names):
         """ Names with their classes, grouped by class """
         return sorted(({'name': names[x],
-                        'class': ', '.join(sorted(classes.get(x, set()) - {''}))}
+                        'class': ', '.join(sorted(class_labels.get(c) or c
+                                                  for c in classes.get(x, set()) - {''}))}
                        for x in keys), key=lambda x: (x['class'], x['name']))
     return {
         'syncer_hosts': len(in_syncer),
         'matched': entries(in_snow.keys() & in_syncer.keys(), in_syncer),
         'missing_in_snow': entries(in_syncer.keys() - in_snow.keys(), in_syncer),
         'missing_in_syncer': entries(in_snow.keys() - in_syncer.keys(), in_snow),
-        'by_class': sorted(per_class.values(), key=lambda x: (-x['extra'], x['class'])),
+        # The classes with the most names first
+        'by_class': sorted(per_class.values(), key=lambda x: (-x['total'], x['class'])),
     }
+
+
+def pick_values(record, raw):
+    """
+    A record read with sysparm_display_value=all the way the account
+    reads it: the raw values with `raw`, else the display values
+    """
+    return {key: value.get('value' if raw else 'display_value')
+            if isinstance(value, dict) else value
+            for key, value in record.items()}
+
+
+def class_of(record):
+    """
+    The class id and display name of a record read with
+    sysparm_display_value=all, where every field is a dict of both
+    """
+    value = record.get(CLASS_FIELD)
+    if isinstance(value, dict):
+        return value.get('value') or '', value.get('display_value') or ''
+    return value or '', value or ''
 
 
 def split_tables(value):
@@ -224,14 +256,16 @@ class SyncServiceNow(Plugin):
         except ValueError:
             return 1000
 
-    def table_params(self, limit, offset=0, query=None, fields=None):
+    def table_params(self, limit, offset=0, query=None, fields=None,  # pylint: disable=too-many-arguments,too-many-positional-arguments
+                     display=None):
         """
         Query parameters of one Table API request, built from the
-        account. `query` and `fields` replace the account's own ones — a
-        read of the relationship table narrows itself that way.
+        account. `query`, `fields` and `display` replace the account's own
+        ones — a read of the relationship table narrows itself that way.
         """
         params = {
-            'sysparm_display_value': self.config.get('sysparm_display_value', 'true'),
+            'sysparm_display_value': display or self.config.get('sysparm_display_value',
+                                                                'true'),
             'sysparm_exclude_reference_link': 'true',
             # Nothing here reads the total number of records, and the
             # count query the instance does for it is what makes every
@@ -326,7 +360,7 @@ class SyncServiceNow(Plugin):
 
 #.
 #   .-- Read one table (paged)
-    def get_table(self, table, query=None, fields=None):
+    def get_table(self, table, query=None, fields=None, display=None):
         """
         Yield all records of a ServiceNow table, paging through the
         Table API with sysparm_limit/sysparm_offset until exhausted.
@@ -335,7 +369,8 @@ class SyncServiceNow(Plugin):
         limit = self.page_size()
         offset = 0
         while True:
-            results = self.read_page(table, self.table_params(limit, offset, query, fields))
+            results = self.read_page(
+                table, self.table_params(limit, offset, query, fields, display))
             if not results:
                 break
 
@@ -757,10 +792,13 @@ class SyncServiceNow(Plugin):
         applies, with the class added.
 
         Every ServiceNow name comes with the class of its records, and
-        `by_class` counts per class how many names have a Syncer host
-        and how many have none, the classes with most names without a
-        host first.
+        `by_class` lists per class its names and how many of them have a
+        Syncer host, the classes with most names first. The read asks for
+        display value and value of every field: the class shows under
+        both its name and its id, and the hostname is taken the way the
+        account's sysparm_display_value takes it.
         """
+        raw = self.config.get('sysparm_display_value', 'true') == 'false'
         fields = self.config.get('sysparm_fields')
         if not self.config.get('rewrite_hostname'):
             fields = f"{self.config.get('hostname_field') or 'name'},{CLASS_FIELD}"
@@ -768,25 +806,28 @@ class SyncServiceNow(Plugin):
             fields = f"{fields},{CLASS_FIELD}"
         in_snow = {}
         classes = {}
+        class_labels = {}
         records = unnamed = 0
         for record in (x for table in split_tables(tables)
-                       for x in self.get_table(table, fields=fields or None)):
+                       for x in self.get_table(table, fields=fields or None, display='all')):
             records += 1
-            labels = self.flatten_record(record)
+            labels = self.flatten_record(pick_values(record, raw))
+            class_id, class_labels[class_id] = class_of(record)
             names = self.record_hostnames(labels)
             if not names:
                 unnamed += 1
             for name in names:
                 in_snow.setdefault(name.lower(), name)
-                classes.setdefault(name.lower(), set()).add(labels.get(CLASS_FIELD, ''))
+                classes.setdefault(name.lower(), set()).add(class_id)
         return {
             'urls': [self.table_url(x) for x in split_tables(tables)],
-            'params': self.table_params(self.page_size(), fields=fields or None),
+            'params': self.table_params(self.page_size(), fields=fields or None,
+                                        display='all'),
             'limits': self.last_rate_limit or {},
             'records': records,
             'unnamed': unnamed,
             'snow_names': len(in_snow),
-        } | compare_names(in_snow, classes, hostnames)
+        } | compare_names(in_snow, classes, hostnames, class_labels)
 
 #.
 #   .-- Import hosts

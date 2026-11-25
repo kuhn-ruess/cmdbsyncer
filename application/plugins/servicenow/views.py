@@ -8,7 +8,7 @@ from flask_login import current_user
 from application.models.account import Account, CustomEntry
 from application.models.host import Host
 
-from .syncer import ServiceNowError, SyncServiceNow, split_tables
+from .syncer import CLASS_FIELD, ServiceNowError, SyncServiceNow, split_tables
 
 DEFAULT_LIMIT = 25
 MAX_LIMIT = 500
@@ -28,6 +28,13 @@ def saved_tables(current, table):
     if len(tables) <= 1:
         return table
     return ','.join(tables + [table])
+
+
+def class_query(class_id):
+    """ The encoded query that selects the records of one class """
+    if not class_id:
+        return f"{CLASS_FIELD}ISEMPTY"
+    return f"{CLASS_FIELD}={class_id}"
 
 
 class ServiceNowQueryView(BaseView):
@@ -108,14 +115,10 @@ class ServiceNowQueryView(BaseView):
             # A query is no sync run, it leaves no log entry behind
             syncer.close()
 
-    @expose('/')
-    def index(self):
-        """
-        Show the query form and, if one was asked for, its result
-        """
-        # A query is read only, so it travels in the URL and stays linkable
-        args = request.args
-        form = {
+    @staticmethod
+    def _form(args):
+        """ The settings of the query form, from the URL """
+        return {
             'account': args.get('account', ''),
             'table': args.get('table', '').strip(),
             'api_path': args.get('api_path', '').strip(),
@@ -126,6 +129,15 @@ class ServiceNowQueryView(BaseView):
             'limit': args.get('limit', str(DEFAULT_LIMIT)),
             'all_fields': args.get('all_fields') == '1',
         }
+
+    @expose('/')
+    def index(self):
+        """
+        Show the query form and, if one was asked for, its result
+        """
+        # A query is read only, so it travels in the URL and stays linkable
+        args = request.args
+        form = self._form(args)
 
         error = None
         result = None
@@ -147,9 +159,36 @@ class ServiceNowQueryView(BaseView):
             limit=limit,
             result=result,
             comparison=comparison,
+            # The form again, for the link to the names of one class
+            class_args={key: ('1' if value is True else value) for key, value in form.items()
+                        if value and key != 'limit'},
             error=error,
             may_save=current_user.has_right('account'),
         )
+
+    @expose('/class')
+    def class_names(self):
+        """
+        The names of one class of a comparison, on a page of its own: a
+        class holds thousands of them. Reads only the records of that
+        class, with the query of the form on top.
+        """
+        args = request.args
+        form = self._form(args)
+        class_id = args.get('class_id', '').strip()
+        form['sysparm_query'] = '^'.join(filter(None, [
+            class_query(class_id), form['sysparm_query']]))
+        error = None
+        entry = None
+        try:
+            comparison = self._query(form, 0, compare=True)
+            entry = next((x for x in comparison['by_class'] if x['class'] == class_id),
+                         {'class': class_id, 'label': class_id, 'names': [],
+                          'matched': 0, 'extra': 0, 'total': 0})
+        except ServiceNowError as query_error:
+            error = str(query_error)
+        return self.render('admin/servicenow_class_names.html', form=form,
+                           class_id=class_id, entry=entry, error=error)
 
     @expose('/save-account', methods=('POST',))
     def save_account(self):
