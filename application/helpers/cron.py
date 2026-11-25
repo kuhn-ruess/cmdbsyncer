@@ -63,25 +63,21 @@ def register_cronjob(job_name, job_function, first=False):
     plugin_register.append(job_name)
 
 
-# What the Run Import job starts, by account type:
-# {account_type: {variant: {'label', 'import', 'inventorize'}}}
+# The import and inventorize functions of each account type:
+# {account_type: [{'import': function, 'inventorize': function}]}, the first
+# entry is what Run Jobs defined by Account runs for an account without jobs
 import_register = {}
 
 
-def register_import(account_type, import_function=None, inventorize_function=None,
-                    variant='', label=''):
+def register_import(account_type, import_function=None, inventorize_function=None):
     """
-    Register the functions Run Import starts for accounts of the type:
-    the import for a main source, the inventorize for an additional one.
-
-    A plugin with more than one import per account type registers each
-    as a variant, the account picks one, the first registered is the
-    default.
+    Register an import and inventorize of a plugin for accounts of the
+    type: tells which of its jobs import and which inventorize, the first
+    registered is run for an account that lists no jobs.
     """
     if _caller_plugin()[1]:
         return
-    import_register.setdefault(account_type, {})[variant] = {
-        'label': label or variant,
+    import_register.setdefault(account_type, []).append({
         'import': import_function,
         'inventorize': inventorize_function,
-    }
+    })

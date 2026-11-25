@@ -10,8 +10,10 @@ from flask_login import current_user
 from flask_admin.actions import action
 from flask_admin.base import expose
 from flask_admin.form import rules
+from flask_admin.model.fields import InlineFieldList
 from wtforms import SelectField, StringField
 from wtforms.validators import Optional, ValidationError
+from application import plugin_register
 from application.models.cron import CronGroup, job_account
 from application.views.default import DefaultModelView, name_and_enabled_filters
 from application.views._form_sections import modern_form, section
@@ -21,7 +23,9 @@ from application.models.host_templates import assignable_templates
 from application.helpers.get_account import get_account_by_name
 from application.helpers.import_hostnames import take_over_shadow_data
 from application.helpers.plugins import custom_field_help, discover_plugins, plugin_jobs
-from application.helpers.run_import import variant_choices, variant_problem
+from application.helpers.account_jobs import (FORBIDDEN_KINDS, account_job_settings,
+                                              job_kind, job_problems,
+                                              several_imports)
 from application.plugins.checkmk.models import CheckmkObjectCache  # TODO: Make Plugin Compatible
 from application.docu_links import docu_links
 
@@ -42,16 +46,20 @@ _HELP_IS_OBJECT = (
 )
 _IMPORTS_AS_CHOICES = [('', 'Hosts'), ('1', 'Objects')]
 _HELP_RESTRICT_TO = (
-    "Run Import (defined by Account) follows the role. An additional source "
-    "writes under inventorize_key."
+    "Limits the jobs the account may run. An additional source writes under "
+    "inventorize_key."
 )
-_HELP_IMPORT_VARIANT = "Which import of the plugin Run Import starts."
+_HELP_ACCOUNT_JOBS = (
+    "Run Jobs defined by Account runs them in this order. None: the import, "
+    "for an additional source the inventorize. Several import jobs, devices "
+    "and VMs for example, make the object type Automatic."
+)
 _HELP_VALID_HOSTNAME = "Skips names that are no valid hostname (object type Host Object)."
 _HELP_REQUIRE_FQDN = "Skips names that are no FQDN."
 
 # The roles explained in the choice itself, the model keeps the short names
 _ROLE_CHOICES = [
-    ('', "Not limited: every job allowed, Run Import imports"),
+    ('', "Not limited: every job allowed"),
     ('import', "Main source: imports hosts and their labels"),
     ('inventorize', "Additional source: adds inventory to hosts of other accounts"),
     ('export', "Export target: only exports, no import or inventorize"),
@@ -72,24 +80,28 @@ def _template_choices(form):
     return form
 
 
-def _variant_choices(form, account_type):
-    """Explain the roles, offer the imports of the account type in Import from"""
+def _source_choices(form):
+    """Explain the roles and what an import creates in the choices"""
     if hasattr(form, 'restrict_to'):
         form.restrict_to.choices = _ROLE_CHOICES
     if hasattr(form, 'is_object'):
         form.is_object.choices = _IMPORTS_AS_CHOICES
-    if hasattr(form, 'import_variant'):
-        form.import_variant.choices = variant_choices(account_type)
     return form
 
 
-def _check_variant(model, account_type):
+def _check_jobs(model, account_type):
     """
-    Refuse an Import from the plugin of the account does not have, and
-    Plugin Settings for jobs of other plugins
+    Refuse jobs of other plugins or jobs the role does not allow, in
+    Jobs and in Plugin Settings. Several import jobs make the object
+    type Automatic.
     """
-    if problem := variant_problem(account_type, model.import_variant):
-        raise ValidationError(problem)
+    settings = account_job_settings(model)
+    settings['typ'] = account_type
+    if problems := job_problems(settings):
+        raise ValidationError(problems[0])
+    if several_imports(settings['account_jobs']):
+        # Each import job decides what it creates, devices and VMs alike
+        model.object_type = 'auto'
     allowed = plugin_jobs(account_type)
     for entry in model.plugin_settings:
         if entry.plugin not in allowed:
@@ -100,6 +112,8 @@ def _check_variant(model, account_type):
 class _SourceViewMixin:  # pylint: disable=too-few-public-methods
     """What account_source_fields.html needs to offer only fitting jobs"""
 
+    forbidden_kinds = {role: sorted(kinds) for role, kinds in FORBIDDEN_KINDS.items()}
+
     @staticmethod
     def plugin_jobs_by_type():
         """The jobs Plugin Settings offers, by account type"""
@@ -107,25 +121,15 @@ class _SourceViewMixin:  # pylint: disable=too-few-public-methods
                 for account_type in discover_plugins()}
 
     @staticmethod
+    def job_kinds():
+        """Import, inventorize or other, by job name, for the role filter"""
+        return {job: job_kind(job) for job in plugin_register}
+
+    @staticmethod
     def parent_types():
         """Type of every main account, a child account has the one of its parent"""
         return {str(account.id): account.type
                 for account in Account.objects(is_child__ne=True).only('type')}
-
-
-class _VariantCell(rules.Field):
-    """
-    The Import from field with its help as a cell next to the role, only
-    shown when the plugin has more than one import to choose from
-    """
-
-    def __call__(self, form, form_opts=None, field_args=None):
-        field = getattr(form, self.field_name, None)
-        if field is None or len(field.choices) < 2:
-            return ''
-        return (Markup('<div class="acct-cell">')
-                + super().__call__(form, form_opts, field_args)
-                + Markup(f'<p class="acct-hint">{escape(_HELP_IMPORT_VARIANT)}</p></div>'))
 
 
 _HELP_CMDB_OBJECT = "Gets the CMDB template and default fields, stays when gone from the source."
@@ -147,6 +151,15 @@ _SOURCE_CSS = rules.HTML(
     '.acct-more{margin:4px 0 8px;}'
     '.acct-more>summary{cursor:pointer;color:var(--surface-muted,#6c757d);'
     'margin-bottom:8px;}'
+    # One line per job: drag handle (the legend), select, remove button
+    '#account_jobs .inline-field.card{display:flex;flex-direction:row;'
+    'align-items:center;gap:4px;padding:4px 40px 4px 8px;'
+    'margin-bottom:6px!important;}'
+    '#account_jobs .inline-field.card>legend{width:auto;margin:0;}'
+    '#account_jobs .inline-field.card>legend small{font-size:0;}'
+    '#account_jobs .inline-field.card>select{flex:1 1 auto;}'
+    '#account_jobs .inline-field.card>.clearfix{display:none;}'
+    '#account_jobs .cmdb-inline-remove{top:50%;transform:translateY(-50%);}'
     '</style>'
 )
 
@@ -156,9 +169,11 @@ def _hint(text):
     return rules.HTML(f'<p class="acct-hint">{escape(text)}</p>')
 
 
-def _cell(*field_rules):
+def _cell(*field_rules, cell_id=None):
     """One grid cell of an .acct-row"""
-    return [rules.HTML('<div class="acct-cell">'), *field_rules, rules.HTML('</div>')]
+    attribute = f' id="{cell_id}"' if cell_id else ''
+    return [rules.HTML(f'<div class="acct-cell"{attribute}>'), *field_rules,
+            rules.HTML('</div>')]
 
 
 def _row(*cells):
@@ -195,11 +210,11 @@ def _more_settings(*field_rules):
 _ROLE_RULES = [
     _SOURCE_CSS,
     *_row(_cell(rules.Field('restrict_to'), _hint(_HELP_RESTRICT_TO)),
-          [_VariantCell('import_variant')]),
+          _cell(rules.Field('account_jobs'), _hint(_HELP_ACCOUNT_JOBS))),
 ]
 _IMPORTS_AS_RULES = [
     *_row(_cell(rules.Field('is_object'), _hint(_HELP_IS_OBJECT)),
-          _cell(rules.Field('object_type'))),
+          _cell(rules.Field('object_type'), cell_id='account-object-type')),
 ]
 _TEMPLATE_AND_NAME_RULES = [
     rules.Field('auto_apply_templates'),
@@ -207,6 +222,21 @@ _TEMPLATE_AND_NAME_RULES = [
     *_row(_check('check_for_valid_hostname', _HELP_VALID_HOSTNAME),
           _check('require_fqdn', _HELP_REQUIRE_FQDN)),
 ]
+
+class _JobListField(InlineFieldList):
+    """
+    The jobs of an account in their order, one select per row. A multi
+    select would lose the order. The rows offer every job, the form
+    script leaves those of the plugin, saving checks them.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(
+            SelectField(choices=lambda: [(job, job) for job in plugin_register],
+                        validate_choice=False,
+                        render_kw={'class': 'form-control form-control-sm'}),
+            min_entries=0, **kwargs)
+
 
 class _PasswordField(StringField):
     """
@@ -294,14 +324,14 @@ class ChildAccountModelView(_SourceViewMixin, DefaultModelView):
     column_labels = {
         'require_fqdn': 'Require FQDN',
         'restrict_to': 'Role',
-        'import_variant': 'Import from',
+        'account_jobs': 'Jobs',
         'auto_apply_templates': 'Auto Apply Templates',
     }
 
     form_args = {
         'require_fqdn': {'label': 'Require FQDN'},
         'restrict_to': {'label': 'Role'},
-        'import_variant': {'label': 'Import from', 'validate_choice': False},
+        'account_jobs': {'label': 'Jobs'},
         'is_object': {'label': 'Imports as', 'coerce': bool},
         'object_type': {'label': 'Object type'},
         'auto_apply_templates': {'label': 'Auto Apply Templates',
@@ -329,8 +359,8 @@ class ChildAccountModelView(_SourceViewMixin, DefaultModelView):
 
 
     form_overrides = {
-        'import_variant': SelectField,
         'is_object': SelectField,
+        'account_jobs': _JobListField,
     }
 
     edit_template = 'admin/account_child_edit.html'
@@ -338,19 +368,18 @@ class ChildAccountModelView(_SourceViewMixin, DefaultModelView):
 
     def create_form(self, obj=None):
         """Offer only CMDB templates to apply"""
-        return _variant_choices(_template_choices(super().create_form(obj)), None)
+        return _source_choices(_template_choices(super().create_form(obj)))
 
     def edit_form(self, obj=None):
-        """Offer only CMDB templates to apply, the imports of the parent"""
-        parent_type = obj.parent.type if obj and obj.parent else None
-        return _variant_choices(_template_choices(super().edit_form(obj)), parent_type)
+        """Offer only CMDB templates to apply"""
+        return _source_choices(_template_choices(super().edit_form(obj)))
 
     def on_model_change(self, form, model, is_created):
         """
         On Save Operations
         """
         model.is_child = True
-        _check_variant(model, model.parent.type if model.parent else None)
+        _check_jobs(model, model.parent.type if model.parent else None)
         return super().on_model_change(form, model, is_created)
 
     def is_accessible(self):
@@ -371,7 +400,7 @@ class AccountModelView(_SourceViewMixin, DefaultModelView):
     column_filters = name_and_enabled_filters()
 
     column_exclude_list = ['custom_fields', 'is_child', 'parent', 'password_crypted',
-                           'auto_apply_templates', 'import_variant']
+                           'auto_apply_templates', 'account_jobs']
 
     # The custom fields are name/value pairs, so what they configure is
     # invisible in the form. These templates add the help of a field
@@ -448,7 +477,7 @@ class AccountModelView(_SourceViewMixin, DefaultModelView):
         'require_fqdn': 'Require FQDN',
         'cmdb_object': 'CMDB object',
         'restrict_to': 'Role',
-        'import_variant': 'Import from',
+        'account_jobs': 'Jobs',
         'shadow_mode': 'Shadow source',
         'auto_apply_templates': 'Auto Apply Templates',
     }
@@ -457,7 +486,7 @@ class AccountModelView(_SourceViewMixin, DefaultModelView):
         'require_fqdn': {'label': 'Require FQDN'},
         'cmdb_object': {'label': 'CMDB object'},
         'restrict_to': {'label': 'Role'},
-        'import_variant': {'label': 'Import from', 'validate_choice': False},
+        'account_jobs': {'label': 'Jobs'},
         'is_object': {'label': 'Imports as', 'coerce': bool},
         'object_type': {'label': 'Object type'},
         'shadow_mode': {'label': 'Shadow source'},
@@ -514,8 +543,8 @@ class AccountModelView(_SourceViewMixin, DefaultModelView):
         'password': _PasswordField,
         'address': StringField,
         'username': StringField,
-        'import_variant': SelectField,
         'is_object': SelectField,
+        'account_jobs': _JobListField,
     }
 
     form_widget_args = {
@@ -587,7 +616,7 @@ class AccountModelView(_SourceViewMixin, DefaultModelView):
         semantics at the plugin layer.
         """
         form = _template_choices(super().edit_form(obj))
-        _variant_choices(form, obj.type if obj else None)
+        _source_choices(form)
         if hasattr(form, 'type'):
             self._lock_type_field(form)
         return form
@@ -604,7 +633,7 @@ class AccountModelView(_SourceViewMixin, DefaultModelView):
         form = _template_choices(super().create_form(obj))
 
         account_type = (request.args.get('type') or '').strip()
-        _variant_choices(form, account_type or None)
+        _source_choices(form)
         if hasattr(form, 'object_type') and not form.object_type.data:
             # A new account imports hosts, of the object type Host Object
             form.object_type.data = 'host'
@@ -655,7 +684,7 @@ class AccountModelView(_SourceViewMixin, DefaultModelView):
         # is already on the model so the preset lookup (and every field
         # below) targets the original plugin type.
         account_type = form.type.data or model.type
-        _check_variant(model, account_type)
+        _check_jobs(model, account_type)
         main_presets = []
         default_fields = []
         plugins = discover_plugins()

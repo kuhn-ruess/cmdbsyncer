@@ -10,9 +10,9 @@ from markupsafe import Markup, escape
 from wtforms import BooleanField, HiddenField
 from wtforms.validators import ValidationError
 
-from application.helpers.run_import import (RUN_IMPORT_JOB, RunImportError,
-                                            account_import_settings, creates,
-                                            import_function, is_import_job)
+from application.helpers.account_jobs import (ACCOUNT_JOBS_JOB, AccountJobsError,
+                                              account_job_settings, creates,
+                                              is_import_job, jobs_to_run)
 from application.models.cron import job_account, job_account_id
 from application.views.default import DefaultModelView, name_and_enabled_filters
 from application.views._form_sections import modern_form, section
@@ -99,10 +99,10 @@ def _account_cell(entry):
     which is where the operator fixes it."""
     account = job_account(entry)
     if account is not None:
-        if is_import_job(entry['command']):
+        if is_import_job(entry['command']) and (what := creates(account)):
             # The job name says hosts or objects, the account decides
             return Markup(f'{escape(account)}<br><small>creates '
-                          f'{escape(creates(account))}</small>')
+                          f'{escape(what)}</small>')
         return escape(account)
     if job_account_id(entry):
         return Markup(
@@ -147,26 +147,18 @@ def _format_protected(_v, _c, m, _p):
         )
     return ''
 
-def _check_run_import_jobs(model):
-    """
-    Refuse a Run Import job whose account can not be used with it, and
-    say what an account without a role does
-    """
+def _check_account_jobs(model):
+    """Refuse a Run Jobs defined by Account job whose account can not run"""
     for entry in model.jobs:
-        if entry.command != RUN_IMPORT_JOB:
+        if entry.command != ACCOUNT_JOBS_JOB:
             continue
         account = job_account(entry)
         if not account:
-            raise ValidationError(f"Job '{entry.name}': {RUN_IMPORT_JOB} needs an account")
-        settings = account_import_settings(account)
+            raise ValidationError(f"Job '{entry.name}': {ACCOUNT_JOBS_JOB} needs an account")
         try:
-            import_function(settings)
-        except RunImportError as error:
+            jobs_to_run(account_job_settings(account))
+        except AccountJobsError as error:
             raise ValidationError(f"Job '{entry.name}': {error}") from error
-        if not settings['restrict_to']:
-            flash(f"Job '{entry.name}': account {account.name} is not limited, "
-                  f"{RUN_IMPORT_JOB} imports hosts. Set the role Additional "
-                  "source to inventorize.", 'info')
 
 
 class CronGroupView(DefaultModelView):
@@ -335,7 +327,7 @@ class CronGroupView(DefaultModelView):
         else:
             # Own minutes would silently win over the chosen interval
             model.custom_interval_in_minutes = None
-        _check_run_import_jobs(model)
+        _check_account_jobs(model)
         plaintext = None
         rotate = bool(getattr(form, 'rotate_webhook_token', None)
                       and form.rotate_webhook_token.data)

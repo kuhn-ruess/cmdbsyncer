@@ -32,19 +32,50 @@
             }
         }
 
-        // Hosts are of the object type Host Object
+        // Hosts of one import job are of the object type Host Object.
+        // Several import jobs (devices and VMs, ...) decide it themselves,
+        // the object type is Automatic then. It only shows for objects
+        // or several import jobs.
         var objectType = document.getElementById('object_type');
-        function hostsType() {
-            if (importsAs && objectType && !importsAs.value) {
-                objectType.value = 'host';
-                objectType.dispatchEvent(new Event('change'));
+        var objectTypeCell = document.getElementById('account-object-type');
+        function severalImports() {
+            var count = 0;
+            document.querySelectorAll('select[id^="account_jobs-"]').forEach(function (select) {
+                if (jobKinds[select.value] === 'import') { count += 1; }
+            });
+            return count > 1;
+        }
+        function setObjectType(value) {
+            if (objectType.value === value) { return; }
+            objectType.value = value;
+            objectType.dispatchEvent(new Event('change'));
+            if (window.jQuery) { window.jQuery(objectType).trigger('change'); }
+        }
+        function updateObjectType(hostsChosen) {
+            if (!objectType) { return; }
+            var several = severalImports();
+            var objects = importsAs && importsAs.value === '1';
+            if (several) {
+                setObjectType('auto');
+            } else if (hostsChosen === true && !objects) {
+                setObjectType('host');
+            }
+            // Disabled is not sent, saving sets Automatic for several jobs
+            objectType.disabled = several;
+            if (objectTypeCell) {
+                objectTypeCell.style.display = (objects || several) ? '' : 'none';
             }
         }
-        if (importsAs) { importsAs.addEventListener('change', hostsType); }
+        if (importsAs) {
+            importsAs.addEventListener('change', function () { updateObjectType(true); });
+        }
 
-        // Plugin Settings only offers the jobs of the plugin of the account
+        // Jobs and Plugin Settings only offer the jobs of the plugin of the
+        // account, Jobs also only those its role allows
         var pluginJobs = {{ admin_view.plugin_jobs_by_type() | tojson }};
         var parentTypes = {{ admin_view.parent_types() | tojson }};
+        var jobKinds = {{ admin_view.job_kinds() | tojson }};
+        var forbiddenKinds = {{ admin_view.forbidden_kinds | tojson }};
         function accountType() {
             var type = document.getElementById('type');
             if (type && type.value) { return type.value; }
@@ -54,22 +85,42 @@
         function filterPluginJobs() {
             var allowed = pluginJobs[accountType()];
             if (!allowed) { return; }
-            document.querySelectorAll('select[id^="plugin_settings-"][id$="-plugin"]')
+            var forbidden = forbiddenKinds[role ? role.value : ''] || [];
+            document.querySelectorAll('select[id^="plugin_settings-"][id$="-plugin"], '
+                                      + 'select[id^="account_jobs-"]')
                 .forEach(function (select) {
+                    var isJob = select.id.indexOf('account_jobs-') === 0;
                     Array.prototype.slice.call(select.options).forEach(function (option) {
-                        if (option.value && !option.selected
-                                && allowed.indexOf(option.value) < 0) {
-                            option.remove();
-                        }
+                        var off = allowed.indexOf(option.value) < 0
+                            || (isJob && forbidden.indexOf(jobKinds[option.value]) >= 0);
+                        if (option.defaultSelected) { off = false; }
+                        // Hidden and disabled, so a role change can bring it back
+                        if (option.hidden !== off) { option.hidden = off; }
+                        if (option.disabled !== off) { option.disabled = off; }
                     });
+                    if (select.selectedOptions.length && select.selectedOptions[0].disabled) {
+                        var first = Array.prototype.find.call(select.options,
+                            function (option) { return !option.disabled; });
+                        if (first) { select.value = first.value; }
+                    }
                 });
         }
+        if (role) { role.addEventListener('change', filterPluginJobs); }
         filterPluginJobs();
         // New rows of Plugin Settings are added by script
         var form = document.querySelector('form.admin-form') || document.querySelector('form');
         if (form && window.MutationObserver) {
-            new MutationObserver(filterPluginJobs).observe(form, {childList: true, subtree: true});
+            new MutationObserver(function () {
+                filterPluginJobs();
+                updateObjectType();
+            }).observe(form, {childList: true, subtree: true});
+            form.addEventListener('change', function (event) {
+                if (event.target.id && event.target.id.indexOf('account_jobs-') === 0) {
+                    updateObjectType();
+                }
+            });
         }
+        updateObjectType();
 
         [role, importsAs].forEach(function (field) {
             if (field) { field.addEventListener('change', update); }

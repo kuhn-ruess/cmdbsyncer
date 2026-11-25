@@ -679,11 +679,7 @@ def netbox_host_debug(hostname):
     attribute_table("Filtered Attribute for Netbox Rules", attributes['filtered'])
     attribute_table("Attributes by Rule ", extra_attributes)
 #.
-register_import('netbox', import_function=netbox_device_import,
-                variant='devices', label='Devices')
-register_import('netbox', import_function=netbox_vm_import,
-                variant='vms', label='Virtual Machines')
-register_import('netbox', import_function=netbox_interface_import,
-                variant='dcim_interfaces', label='DCIM Interfaces')
-register_import('netbox', import_function=netbox_virt_interface_import,
-                variant='virtualization_interfaces', label='Virtualization Interfaces')
+register_import('netbox', import_function=netbox_device_import)
+register_import('netbox', import_function=netbox_vm_import)
+register_import('netbox', import_function=netbox_interface_import)
+register_import('netbox', import_function=netbox_virt_interface_import)

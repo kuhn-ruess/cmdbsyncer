@@ -41,8 +41,8 @@ def get_account_types():
 # The role of an account. A main source imports hosts and must not write
 # inventory data, an additional source only inventorizes, an export
 # target does neither, so a wrong CLI call or cron entry does not put
-# data on hosts the account was never meant to touch. Run Import picks
-# import or inventorize from it. A child account has its own role.
+# data on hosts the account was never meant to touch. It also limits the
+# jobs of the account. A child account has its own role.
 account_restrictions = [
     ('', "Not limited"),
     ('import', "Main source"),
@@ -52,7 +52,7 @@ account_restrictions = [
 
 
 object_types = [
-    ('auto', 'Undefined'),
+    ('auto', 'Automatic'),
     ('host', 'Host Object'),
     ('application', 'Application'),
     ('service', 'Service'),
@@ -114,8 +114,8 @@ class Account(db.Document):
         restrict_to (str): Role: 'import' (main source), 'inventorize'
             (additional source), 'export' (export target) or empty for
             not limited.
-        import_variant (str): Which import of its plugin Run Import starts,
-            for plugins with several. Empty for the first one.
+        account_jobs (list): Jobs of its plugin Run Jobs defined by Account
+            runs, in this order. Empty for the import or inventorize.
         custom_fields (list): List of custom fields (CustomEntry).
         plugin_settings (list): List of plugin settings (PluginSettings).
         enabled (bool): Whether the account is enabled.
@@ -235,7 +235,7 @@ class Account(db.Document):
 
 
     restrict_to = db.StringField(choices=account_restrictions, default='')
-    import_variant = db.StringField(default='')
+    account_jobs = db.ListField(field=db.StringField())
 
     enabled = db.BooleanField(default=True)
 

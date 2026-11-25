@@ -59,7 +59,5 @@ def cli_get_interfaces(account):
 
 register_cronjob("Cisco DNA: Get Devices", get_hosts)
 register_cronjob("Cisco DNA: Get Interfaces", get_interfaces)
-register_import('cisco_dna', import_function=get_hosts,
-                variant='devices', label='Devices')
-register_import('cisco_dna', import_function=get_interfaces,
-                variant='interfaces', label='Interfaces')
+register_import('cisco_dna', import_function=get_hosts)
+register_import('cisco_dna', import_function=get_interfaces)

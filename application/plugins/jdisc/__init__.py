@@ -163,11 +163,8 @@ register_cronjob("JDisc: Inventorize Executables", jdisc_executables_inventorize
 register_cronjob("JDisc: Import Executables", jdisc_executables_import)
 #.
 register_import('jdisc', import_function=jdisc_device_import,
-                inventorize_function=jdisc_device_inventorize,
-                variant='devices', label='Devices')
+                inventorize_function=jdisc_device_inventorize)
 register_import('jdisc', import_function=jdisc_applications_import,
-                inventorize_function=jdisc_application_inventorize,
-                variant='applications', label='Applications')
+                inventorize_function=jdisc_application_inventorize)
 register_import('jdisc', import_function=jdisc_executables_import,
-                inventorize_function=jdisc_executables_inventorize,
-                variant='executables', label='Executables')
+                inventorize_function=jdisc_executables_inventorize)

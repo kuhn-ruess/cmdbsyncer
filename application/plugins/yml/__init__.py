@@ -54,8 +54,6 @@ register_cronjob('YML HTTP: Import Hosts', import_hosts_rest)
 register_cronjob('YML HTTP: Inventorize Objects', inventorize_hosts_rest)
 register_cronjob('YML FILE: Inventorize Objects', inventorize_hosts_file)
 register_import('yml', import_function=import_hosts_yml,
-                inventorize_function=inventorize_hosts_file,
-                variant='file', label='File')
+                inventorize_function=inventorize_hosts_file)
 register_import('yml', import_function=import_hosts_rest,
-                inventorize_function=inventorize_hosts_rest,
-                variant='http', label='HTTP')
+                inventorize_function=inventorize_hosts_rest)
