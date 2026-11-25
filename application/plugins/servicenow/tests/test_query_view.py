@@ -53,7 +53,8 @@ class TestSaveAccount(unittest.TestCase):
                 patch.object(views, 'Account', account_model), \
                 patch.object(views, 'current_user', user), \
                 patch.object(views, 'CustomEntry', SimpleNamespace), \
-                patch.object(views, 'url_for', lambda _endpoint, **args: '/?' + urlencode(args)), \
+                patch.object(views, 'url_for',
+                             lambda _endpoint, **args: '/?' + urlencode(args, doseq=True)), \
                 patch.object(views, 'flash') as flash:
             # Past Flask-Admin's access check, which needs a login: the
             # right to save into an account is checked by the endpoint
@@ -64,12 +65,14 @@ class TestSaveAccount(unittest.TestCase):
         response, written, _ = self._save(
             {'account': 'snow', 'table': 'cmdb_ci', 'api_path': '/api/now',
              'hostname_field': 'fqdn', 'sysparm_query': ' a=1^b=2 ',
-             'sysparm_fields': 'name,fqdn'},
+             'sysparm_fields': 'name,fqdn', 'exclude_accounts': 'csv, ldap'},
             existing=('tables', 'api_path', 'hostname_field', 'sysparm_query',
-                      'sysparm_fields'))
+                      'sysparm_fields', 'compare_exclude_accounts'))
         self.assertEqual(written, {'tables': 'cmdb_ci', 'api_path': '/api/now',
                                    'hostname_field': 'fqdn', 'sysparm_query': 'a=1^b=2',
-                                   'sysparm_fields': 'name,fqdn'})
+                                   'sysparm_fields': 'name,fqdn',
+                                   'compare_exclude_accounts': 'csv,ldap'})
+        self.assertIn('exclude_accounts=csv&exclude_accounts=ldap', response.location)
         self.assertIn('table=cmdb_ci', response.location)
 
     def test_a_missing_field_is_added(self):
@@ -149,6 +152,27 @@ class TestClassNames(unittest.TestCase):
                                   True)])
         self.assertEqual(context['entry'], entry)
 
+    def test_the_excluded_accounts_travel_with_the_page(self):
+        context, _ = self._page([('account', 'snow'), ('table', 'cmdb_ci'), ('class_id', 'x'),
+                                 ('exclude_accounts', 'csv'), ('exclude_accounts', 'ldap')], [])
+        self.assertEqual(context['form']['exclude_accounts'], ['csv', 'ldap'])
+
     def test_a_class_without_records_shows_none(self):
         context, _ = self._page({'account': 'snow', 'table': 'cmdb_ci', 'class_id': 'x'}, [])
         self.assertEqual(context['entry']['names'], [])
+
+
+class TestCompareLeavesAccountsOut(unittest.TestCase):
+    """Hosts of excluded accounts are no Syncer hosts in the comparison"""
+
+    def test_the_excluded_accounts_filter_the_export_hosts(self):
+        host = MagicMock(name='Host')
+        syncer_instance = MagicMock(name='syncer', config={})
+        form = {'account': 'snow', 'table': 'cmdb_ci', 'api_path': '', 'hostname_field': '',
+                'sysparm_query': '', 'sysparm_fields': '', 'all_fields': False,
+                'sysparm_display_value': 'true', 'exclude_accounts': ['csv']}
+        with patch.object(views, 'Host', host), \
+                patch.object(views, 'SyncServiceNow', return_value=syncer_instance):
+            View._query(form, 25, compare=True)  # pylint: disable=protected-access
+        host.get_export_hosts.return_value.filter.assert_called_once_with(
+            source_account_name__nin=['csv'])

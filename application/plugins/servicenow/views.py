@@ -67,6 +67,7 @@ class ServiceNowQueryView(BaseView):
             'sysparm_query': account.custom_field('sysparm_query'),
             'sysparm_fields': account.custom_field('sysparm_fields'),
             'sysparm_display_value': account.custom_field('sysparm_display_value', 'true'),
+            'exclude_accounts': split_tables(account.custom_field('compare_exclude_accounts')),
         } for account in Account.objects(enabled=True, type='servicenow').order_by('name')]
 
     @staticmethod
@@ -108,7 +109,8 @@ class ServiceNowQueryView(BaseView):
             if form['hostname_field']:
                 syncer.config['hostname_field'] = form['hostname_field']
             if compare:
-                hostnames = Host.get_export_hosts().scalar('hostname')
+                hostnames = Host.get_export_hosts().filter(
+                    source_account_name__nin=form['exclude_accounts']).scalar('hostname')
                 return syncer.compare_hosts(form['table'], hostnames)
             return syncer.query_table(form['table'], limit=limit)
         finally:
@@ -128,6 +130,8 @@ class ServiceNowQueryView(BaseView):
             'sysparm_display_value': args.get('sysparm_display_value', 'true'),
             'limit': args.get('limit', str(DEFAULT_LIMIT)),
             'all_fields': args.get('all_fields') == '1',
+            # Accounts whose hosts the comparison leaves out of the Syncer side
+            'exclude_accounts': [x for x in args.getlist('exclude_accounts') if x],
         }
 
     @expose('/')
@@ -155,6 +159,7 @@ class ServiceNowQueryView(BaseView):
         return self.render(
             'admin/servicenow_query.html',
             accounts=self._accounts(),
+            host_accounts=sorted(x for x in Host.objects.distinct('source_account_name') if x),
             form=form,
             limit=limit,
             result=result,
@@ -213,6 +218,8 @@ class ServiceNowQueryView(BaseView):
                 # "All fields" is what the query asked for
                 'sysparm_fields': '' if values.get('all_fields') == '1'
                                   else values.get('sysparm_fields', '').strip(),
+                'compare_exclude_accounts': ','.join(
+                    split_tables(values.get('exclude_accounts', ''))),
             }
             # Only these fields change, the rest of the account stays as
             # it is
@@ -226,4 +233,5 @@ class ServiceNowQueryView(BaseView):
         back = {key: values.get(key, '') for key in
                 ('account', 'table', 'api_path', 'hostname_field', 'sysparm_query',
                  'sysparm_fields', 'sysparm_display_value', 'limit', 'all_fields')}
+        back['exclude_accounts'] = split_tables(values.get('exclude_accounts', ''))
         return redirect(url_for('.index', **{k: v for k, v in back.items() if v}))

@@ -126,6 +126,26 @@
                 </div>
             </div>
 
+            <div class="form-row">
+                <div class="form-group col-md-5">
+                    <label for="exclude_accounts">Exclude accounts from the comparison</label>
+                    <select class="form-control" id="exclude_accounts" name="exclude_accounts"
+                            multiple size="{{ [[host_accounts | length, 2] | max, 5] | min }}">
+                        {% for name in host_accounts %}
+                        <option value="{{ name }}"
+                                {% if name in form.exclude_accounts %}selected{% endif %}>
+                            {{ name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">
+                        Hosts imported by these accounts do not count as
+                        Syncer hosts in <em>Compare with Syncer</em>.
+                        Ctrl or Cmd click selects several.
+                    </small>
+                </div>
+            </div>
+
             <button type="submit" name="action" value="query" class="btn btn-primary"
                     {% if not accounts %}disabled{% endif %}>
                 <i class="fa fa-search"></i> Query
@@ -148,7 +168,8 @@
                 {% if may_save %}
                 Save into account writes table, API path, hostname field,
                 query and fields (none with <em>All fields</em>) into the
-                account, so the next import works the same way.
+                account, so the next import works the same way, and the
+                excluded accounts for the next comparison.
                 {% endif %}
             </small>
         </div>
@@ -362,6 +383,7 @@
         (function () {
             var accounts = {{ accounts | tojson }};
             var account = document.getElementById('account');
+            var excluded = document.getElementById('exclude_accounts');
             var fields = {
                 table: document.getElementById('table'),
                 api_path: document.getElementById('api_path'),
@@ -390,6 +412,9 @@
                 fields.sysparm_query.value = selected.sysparm_query;
                 fields.sysparm_fields.value = selected.sysparm_fields;
                 fields.sysparm_display_value.value = selected.sysparm_display_value;
+                Array.prototype.forEach.call(excluded.options, function (option) {
+                    option.selected = selected.exclude_accounts.indexOf(option.value) !== -1;
+                });
             });
 
             // The query as one condition per line and one list value per
@@ -470,14 +495,18 @@
             if (save) {
                 save.addEventListener('click', function () {
                     if (!account.value) { return; }
-                    if (!confirm('Write table, API path, hostname field, query and fields'
+                    if (!confirm('Write table, API path, hostname field, query, fields'
+                                 + ' and the excluded accounts'
                                  + ' into the account "' + account.value
                                  + '"? The next import uses them.')) { return; }
                     var target = document.getElementById('query_save_form');
                     var values = {
                         account: account.value,
                         limit: document.getElementById('limit').value,
-                        all_fields: allFields.checked ? '1' : ''
+                        all_fields: allFields.checked ? '1' : '',
+                        exclude_accounts: Array.prototype.filter.call(excluded.options, function (option) {
+                            return option.selected;
+                        }).map(function (option) { return option.value; }).join(',')
                     };
                     Object.keys(fields).forEach(function (key) { values[key] = fields[key].value; });
                     Object.keys(values).forEach(function (key) {

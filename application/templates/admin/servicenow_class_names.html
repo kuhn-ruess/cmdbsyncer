@@ -10,6 +10,9 @@
     <p class="text-muted">
         Account <strong>{{ form.account }}</strong>, table
         <code>{{ form.table }}</code>, query <code>{{ form.sysparm_query }}</code>.
+        {% if form.exclude_accounts %}
+        Hosts of {{ form.exclude_accounts | join(', ') }} are left out.
+        {% endif %}
         The names are compared with the hosts an export of the Syncer would
         send, the same way as in the comparison.
     </p>
