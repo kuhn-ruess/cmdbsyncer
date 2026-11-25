@@ -11,11 +11,15 @@
         var importsAs = document.getElementById('is_object');
         var importBlock = document.getElementById('account-import-fields');
         var cmdbBlock = document.getElementById('account-cmdb-object');
+        var inventoryKey = document.getElementById('account-inventory-key');
 
         function update() {
             if (importBlock && role) {
                 var creates = role.value !== 'inventorize' && role.value !== 'export';
                 importBlock.style.display = creates ? '' : 'none';
+            }
+            if (inventoryKey) {
+                inventoryKey.style.display = role && role.value === 'inventorize' ? '' : 'none';
             }
             if (cmdbBlock && importsAs) {
                 cmdbBlock.style.display = importsAs.value === '1' ? '' : 'none';

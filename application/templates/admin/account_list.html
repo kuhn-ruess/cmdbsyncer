@@ -1,7 +1,8 @@
 {% extends 'admin/model/list.html' %}
 {% import 'admin/_group_fold.html' as group_fold %}
 
-{# Accounts grouped by their type. The query orders by type, then name;
+{# Child accounts stand indented under their parent, every parent gets
+   a button to add one. Accounts grouped by their type. The query orders by type, then name;
    a heading row goes in front of the first account of every type, it
    folds the group away (see _group_fold.html). An explicit column sort
    shows the normal table. #}
@@ -13,6 +14,77 @@
 {% block tail %}
 {{ super() }}
 {{ group_fold.fold_assets() }}
+<style>
+  tr.account-child-row .account-child-meta {
+    color: var(--surface-muted, #64748b);
+    margin-left: 0.75em;
+  }
+  tr.account-child-row.account-child-disabled a { text-decoration: line-through; }
+</style>
+<script>
+(function() {
+  // Children under their parent, also in the sorted table
+  var children = {{ admin_view.child_rows() | tojson }};
+  var addChild = {{ admin_view.add_child_url() | tojson }};
+  var table = document.querySelector('table.model-list');
+  if (!table || !table.tHead || !table.tBodies[0]) return;
+  var colCount = table.tHead.rows[0].cells.length;
+  Array.prototype.slice.call(table.tBodies[0].rows).forEach(function(row) {
+    var tag = row.querySelector('.account-type');
+    if (!tag) return;
+    var id = tag.getAttribute('data-id');
+    var buttons = row.querySelector('td.list-buttons-column');
+    if (buttons) {
+      var add = document.createElement('a');
+      add.href = addChild + '&parent=' + encodeURIComponent(id);
+      add.className = 'icon';
+      add.title = 'Add child account';
+      add.innerHTML = '<span class="fa fa-user-plus"></span>';
+      buttons.appendChild(add);
+    }
+    var after = row;
+    (children[id] || []).forEach(function(child) {
+      var tr = document.createElement('tr');
+      tr.className = 'account-child-row' + (child.enabled ? '' : ' account-child-disabled');
+      // Empty cells up to the name, the edit button where the others are
+      var nameCell = row.querySelector('td.col-name');
+      var lead = nameCell ? nameCell.cellIndex : 0;
+      for (var i = 0; i < lead; i++) {
+        var cell = document.createElement('td');
+        if (buttons && i === buttons.cellIndex) {
+          cell.className = 'list-buttons-column';
+          var edit = document.createElement('a');
+          edit.href = child.edit;
+          edit.className = 'icon';
+          edit.title = 'Edit child account';
+          edit.innerHTML = '<span class="fa fa-pencil glyphicon glyphicon-pencil"></span>';
+          cell.appendChild(edit);
+        }
+        tr.appendChild(cell);
+      }
+      var td = document.createElement('td');
+      td.colSpan = colCount - lead;
+      var link = document.createElement('a');
+      link.href = child.edit;
+      link.textContent = '\u21b3 ' + child.name;
+      td.appendChild(link);
+      var meta = [];
+      if (child.role) meta.push(child.role);
+      if (child.jobs.length) meta.push('Jobs: ' + child.jobs.join(', '));
+      if (!child.enabled) meta.push('disabled');
+      if (meta.length) {
+        var note = document.createElement('span');
+        note.className = 'account-child-meta';
+        note.textContent = meta.join(' \u00b7 ');
+        td.appendChild(note);
+      }
+      tr.appendChild(td);
+      after.parentNode.insertBefore(tr, after.nextSibling);
+      after = tr;
+    });
+  });
+})();
+</script>
 <script>
 (function() {
   if (new URLSearchParams(window.location.search).get('sort') !== null) return;
@@ -39,9 +111,15 @@
     row.classList.add('account-row');
     row.id = 'account-g' + (heads.length - 1) + '-r' + fold.rowsOf(head).length;
   });
+  // Children fold with the group of their parent
+  Array.prototype.slice.call(tbody.querySelectorAll('tr.account-child-row')).forEach(function(row) {
+    row.classList.add('account-row');
+  });
 
   heads.forEach(function(head) {
-    var count = fold.rowsOf(head).length;
+    var count = fold.rowsOf(head).filter(function(row) {
+      return row.querySelector('.account-type');
+    }).length;
     var note = document.createElement('span');
     note.className = 'group-note';
     note.textContent = count + (count === 1 ? ' account' : ' accounts');

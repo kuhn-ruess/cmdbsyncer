@@ -866,16 +866,17 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     admin.add_category(name="Settings", icon_type='fa', icon_value='fa-cog')
     # Accounts, cronjobs and the configuration live under Settings — they
     # are configuration, not day-to-day working views, and keep the top bar
-    # compact. Each of the three topics gets its own sub menu, so Settings
+    # compact. Accounts is one entry, its child accounts stand in its list;
+    # cronjobs and the configuration get their own sub menu, so Settings
     # itself stays a short list.
     from application.views.account import AccountModelView, ChildAccountModelView
     from flask_login import current_user as _menu_user
 
-    _add_sub_menu(admin, "Accounts", 'fa-user-circle')
-    admin.add_view(AccountModelView(Account, name="Accounts", category="Accounts",
+    admin.add_view(AccountModelView(Account, name="Accounts", category="Settings",
                                     menu_icon_type='fa', menu_icon_value='fa-user-circle'))
+    # Not in the menu (is_visible), its pages edit the child accounts
     admin.add_view(ChildAccountModelView(Account, name="Account Overrides",
-                                         endpoint='account_childs', category="Accounts",
+                                         endpoint='account_childs', category="Settings",
                                          menu_icon_type='fa', menu_icon_value='fa-users'))
 
     from application.models.cron import CronGroup, CronStats

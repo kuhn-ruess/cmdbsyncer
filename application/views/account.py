@@ -2,6 +2,8 @@
 Account Model View
 """
 # pylint: disable=fixme
+import re
+
 from flask import flash, redirect, request, url_for
 from markupsafe import Markup, escape
 from mongoengine.errors import OperationError
@@ -17,7 +19,7 @@ from application import plugin_register
 from application.models.cron import CronGroup, job_account
 from application.views.default import DefaultModelView, name_and_enabled_filters
 from application.views._form_sections import modern_form, section
-from application.models.account import CustomEntry, Account
+from application.models.account import CustomEntry, Account, account_restrictions
 from application.models.host import Host
 from application.models.host_templates import assignable_templates
 from application.helpers.get_account import get_account_by_name
@@ -47,7 +49,11 @@ _HELP_IS_OBJECT = (
 _IMPORTS_AS_CHOICES = [('', 'Hosts'), ('1', 'Objects')]
 _HELP_RESTRICT_TO = (
     "Limits the jobs the account may run. An additional source writes under "
-    "inventorize_key."
+    "its inventory key."
+)
+_HELP_INVENTORY_KEY = (
+    "The inventory of the hosts gets the data under this prefix, e.g. snow. "
+    "Saved as custom field inventorize_key."
 )
 _HELP_ACCOUNT_JOBS = (
     "Run Jobs defined by Account runs them in this order. None: the import, "
@@ -131,6 +137,34 @@ class _SourceViewMixin:  # pylint: disable=too-few-public-methods
         return {str(account.id): account.type
                 for account in Account.objects(is_child__ne=True).only('type')}
 
+    def scaffold_form(self):
+        """The inventory key of an additional source, kept in custom_fields"""
+        form_class = super().scaffold_form()
+        form_class.inventory_key = StringField('Inventory key', validators=[Optional()])
+        return form_class
+
+
+def _show_inventory_key(form, obj):
+    """The inventorize_key custom field of the account in its own field"""
+    if request.method != 'GET' or obj is None or not hasattr(form, 'inventory_key'):
+        return form
+    for entry in obj.custom_fields:
+        if entry.name == 'inventorize_key':
+            form.inventory_key.data = entry.value
+    return form
+
+
+def _store_inventory_key(form, model):
+    """Write the Inventory key field into the custom field inventorize_key"""
+    value = (getattr(form, 'inventory_key', None) and form.inventory_key.data or '').strip()
+    if not value:
+        return
+    for entry in model.custom_fields:
+        if entry.name == 'inventorize_key':
+            entry.value = value
+            return
+    model.custom_fields.append(CustomEntry(name='inventorize_key', value=value))
+
 
 _HELP_CMDB_OBJECT = "Gets the CMDB template and default fields, stays when gone from the source."
 
@@ -209,7 +243,10 @@ def _more_settings(*field_rules):
 
 _ROLE_RULES = [
     _SOURCE_CSS,
-    *_row(_cell(rules.Field('restrict_to'), _hint(_HELP_RESTRICT_TO)),
+    *_row(_cell(rules.Field('restrict_to'), _hint(_HELP_RESTRICT_TO),
+                rules.HTML('<div id="account-inventory-key">'),
+                rules.Field('inventory_key'), _hint(_HELP_INVENTORY_KEY),
+                rules.HTML('</div>')),
           _cell(rules.Field('account_jobs'), _hint(_HELP_ACCOUNT_JOBS))),
 ]
 _IMPORTS_AS_RULES = [
@@ -302,7 +339,47 @@ def _render_type(_view, _context, model, _name):
     labels = dict(Account._fields['type'].choices or [])
     value = model.type or ''
     return Markup(f'<span class="account-type" data-type="{escape(value)}" '
+                  f'data-id="{model.id}" '
                   f'data-label="{escape(labels.get(value, value))}">{escape(value)}</span>')
+
+
+def child_name(model):
+    """
+    A name for a child account saved without one: the parent and its
+    first job, else its role, numbered when taken
+    """
+    parent = model.parent.name if model.parent else 'account'
+    if model.account_jobs:
+        what = model.account_jobs[0].split(':', 1)[-1]
+    else:
+        what = model.restrict_to or 'child'
+    base = re.sub(r'[^a-z0-9_.]+', '-', f'{parent}-{what}'.lower()).strip('-')
+    name, number = base, 2
+    while Account.objects(name=name, id__ne=model.id).first():
+        name, number = f'{base}-{number}', number + 1
+    return name
+
+
+def child_rows():
+    """
+    The child accounts by the id of their parent, for the rows the
+    account list shows indented under each parent
+    """
+    roles = dict(account_restrictions)
+    back = url_for('account.index_view')
+    rows = {}
+    for child in Account.objects(is_child=True).order_by('name'):
+        parent = child.parent
+        if not parent:
+            continue
+        rows.setdefault(str(parent.id), []).append({
+            'name': child.name,
+            'enabled': bool(child.enabled),
+            'role': roles.get(child.restrict_to or '', ''),
+            'jobs': list(child.account_jobs or []),
+            'edit': url_for('account_childs.edit_view', id=str(child.id), url=back),
+        })
+    return rows
 
 class ChildAccountModelView(_SourceViewMixin, DefaultModelView):
     """
@@ -367,12 +444,32 @@ class ChildAccountModelView(_SourceViewMixin, DefaultModelView):
     create_template = 'admin/account_child_create.html'
 
     def create_form(self, obj=None):
-        """Offer only CMDB templates to apply"""
-        return _source_choices(_template_choices(super().create_form(obj)))
+        """
+        Offer only CMDB templates to apply. "Add child" of the account
+        list passes the parent.
+        """
+        form = _source_choices(_template_choices(super().create_form(obj)))
+        parent_id = request.args.get('parent')
+        if parent_id and hasattr(form, 'parent') and not form.parent.data:
+            form.parent.data = Account.objects(id=parent_id, is_child__ne=True).first()
+        return form
+
+    def is_visible(self):
+        """The account list shows the children under their parent"""
+        return False
+
+    def scaffold_form(self):
+        """The name may stay empty, saving sets it"""
+        form_class = super().scaffold_form()
+        form_class.name = StringField(
+            'Name', validators=[Optional()],
+            description='Empty: set from the parent and the first job or the role.')
+        return form_class
 
     def edit_form(self, obj=None):
         """Offer only CMDB templates to apply"""
-        return _source_choices(_template_choices(super().edit_form(obj)))
+        return _show_inventory_key(_source_choices(_template_choices(super().edit_form(obj))),
+                                   obj)
 
     def on_model_change(self, form, model, is_created):
         """
@@ -380,6 +477,9 @@ class ChildAccountModelView(_SourceViewMixin, DefaultModelView):
         """
         model.is_child = True
         _check_jobs(model, model.parent.type if model.parent else None)
+        _store_inventory_key(form, model)
+        if not (model.name or '').strip():
+            model.name = child_name(model)
         return super().on_model_change(form, model, is_created)
 
     def is_accessible(self):
@@ -408,6 +508,16 @@ class AccountModelView(_SourceViewMixin, DefaultModelView):
     edit_template = 'admin/account_edit.html'
     create_template = 'admin/account_create.html'
     list_template = 'admin/account_list.html'
+
+    @staticmethod
+    def child_rows():
+        """Child accounts by parent id, for the account list"""
+        return child_rows()
+
+    @staticmethod
+    def add_child_url():
+        """Create a child account, the list adds the parent id"""
+        return url_for('account_childs.create_view', url=url_for('account.index_view'))
 
     @staticmethod
     def custom_field_help():
@@ -616,7 +726,7 @@ class AccountModelView(_SourceViewMixin, DefaultModelView):
         semantics at the plugin layer.
         """
         form = _template_choices(super().edit_form(obj))
-        _source_choices(form)
+        _show_inventory_key(_source_choices(form), obj)
         if hasattr(form, 'type'):
             self._lock_type_field(form)
         return form
@@ -685,6 +795,7 @@ class AccountModelView(_SourceViewMixin, DefaultModelView):
         # below) targets the original plugin type.
         account_type = form.type.data or model.type
         _check_jobs(model, account_type)
+        _store_inventory_key(form, model)
         main_presets = []
         default_fields = []
         plugins = discover_plugins()

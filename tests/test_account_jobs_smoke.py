@@ -20,7 +20,7 @@ from application.helpers.account_jobs import (ACCOUNT_JOBS_JOB, AccountJobsError
 from application.helpers.plugins import plugin_jobs
 from application.models.account import Account, PluginSettings
 from application.models.cron import CronGroup, GroupEntry
-from application.views.account import _check_jobs
+from application.views.account import _check_jobs, _store_inventory_key, child_name
 from application.views.cron import _account_cell, _check_account_jobs
 
 calls = []
@@ -140,6 +140,26 @@ except ValidationError as error:
 else:
     fail('plugin settings of another plugin accepted')
 
+own = Account.objects.get(name='jdisc_own')
+eq(child_name(Account(parent=jdisc, is_child=True,
+                      account_jobs=['JDisc: Inventorize Executables'])),
+   'jdisc-inventorize-executables', 'child name from the first job')
+eq(child_name(Account(parent=jdisc, is_child=True, restrict_to='export')),
+   'jdisc-export', 'child name from the role')
+Account(name='jdisc-child', is_child=True, parent=jdisc).save()
+eq(child_name(Account(parent=jdisc, is_child=True)), 'jdisc-child-2', 'taken child name')
+
+
+class KeyForm:  # pylint: disable=too-few-public-methods
+    class inventory_key:  # pylint: disable=invalid-name,too-few-public-methods
+        data = ' snow '
+
+
+_store_inventory_key(KeyForm, own)
+_store_inventory_key(KeyForm, own)
+eq([(x.name, x.value) for x in own.custom_fields], [('inventorize_key', 'snow')],
+   'inventory key stored once')
+
 netbox = Account(name='netbox', type='netbox', restrict_to='import', object_type='host',
                  account_jobs=['Netbox: Import Devices', 'Netbox: Import VMs'])
 _check_jobs(netbox, 'netbox')
@@ -171,8 +191,19 @@ if 'Object Settings' in body or 'Import from' in body:
 child_body = check(
     f'/admin/account_childs/edit/?id={Account.objects.get(name="jdisc_own").id}',
     200).get_data(as_text=True)
-if 'account-import-fields' not in child_body or 'account_jobs-0' not in child_body:
+if 'account-import-fields' not in child_body or 'account_jobs-0' not in child_body \\
+        or 'account-inventory-key' not in child_body:
     fail('child form without import fields or jobs')
+listing = check('/admin/account/', 200).get_data(as_text=True)
+for marker in ('"jdisc_own"', 'Add child account', f'data-id="{jdisc.id}"'):
+    if marker not in listing:
+        fail(f'account list without {marker}')
+if 'Account Overrides' in listing:
+    fail('menu still lists the child accounts on their own')
+created = check(f'/admin/account_childs/new/?parent={jdisc.id}', 200).get_data(as_text=True)
+if f'value="{jdisc.id}" selected' not in created \
+        and f'selected value="{jdisc.id}"' not in created:
+    fail('child create form without the parent')
 
 cron_register.update(originals)
 import_register.update(registered)
