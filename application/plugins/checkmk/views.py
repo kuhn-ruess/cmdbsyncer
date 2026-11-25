@@ -52,6 +52,7 @@ from application.modules.rule.list_source_views import (
     ListSourceViewMixin,
     list_source_rule_form,
 )
+from .editions import edition_for_version
 from .models import (
     action_outcome_types,
     ACTION_CATALOG,
@@ -1765,6 +1766,16 @@ def _render_schedule(_view, _context, model, _name):
     return Markup(html)
 
 
+def _align_edition(setting):
+    """Set the edition that fits the version, with a warning when it changes"""
+    edition = edition_for_version(setting.cmk_edition, setting.cmk_version)
+    if edition != setting.cmk_edition:
+        flash(f"{setting.name}: Edition {setting.cmk_edition} does not exist in "
+              f"Checkmk {setting.cmk_version}, it is set to {edition}. Checkmk 2.5 "
+              "renamed the editions, check the CMK Version Filename too.", 'warning')
+        setting.cmk_edition = edition
+
+
 class CheckmkSettingsView(DefaultModelView):
     """
     Checkmk Server Settings View
@@ -2016,6 +2027,7 @@ class CheckmkSettingsView(DefaultModelView):
                 except ValueError as exp:
                     raise ValidationError(str(exp)) from exp
                 model.set_server_ssh_key(key)
+        _align_edition(model)
         return super().on_model_change(form, model, is_created)
 
     column_labels = {
@@ -2234,6 +2246,7 @@ class CheckmkSettingsView(DefaultModelView):
                 entry = CheckmkSettings.objects(id=rule_id).first()
                 if entry:
                     entry.cmk_version = cmk_version
+                    _align_edition(entry)
                     entry.save()
                     updated_count += 1
             flash(f'CMK Version "{cmk_version}" applied to {updated_count} entries', 'success')

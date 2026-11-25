@@ -13,6 +13,7 @@ site_syncer = _load_real_module(
     'application.plugins.ansible.site_syncer_under_test',
     'plugins/ansible/site_syncer.py',
 )
+from application.plugins.checkmk import editions  # pylint: disable=wrong-import-position
 
 
 class SitesOfSettingsTest(unittest.TestCase):
@@ -104,6 +105,34 @@ class BakeAgentsTest(unittest.TestCase):
             self.assertEqual(site_syncer.SyncSites.bake_agents(site), {
                 'cmk_bake_agents': True, 'cmk_bakery_key_id': '2',
                 'cmk_bakery_passphrase': 'secret'})
+
+
+class EditionForVersionTest(unittest.TestCase):
+    """Checkmk 2.5 renamed the editions: a 2.5 site with the settings on
+    cee failed with "Version 2.5.0p21.cee is not installed"."""
+
+    def test_renamed_both_ways(self):
+        for edition, version, expected in (
+                ('cee', '2.5.0p21', 'pro'), ('cre', '2.5.0', 'community'),
+                ('cce', '2.6.0p1', 'ultimate'), ('cme', '2.5.0p1', 'ultimatemt'),
+                ('pro', '2.4.0p12', 'cee'), ('ultimatemt', '2.3.0p1', 'cme'),
+                ('pro', '2.5.0p21', 'pro'), ('cee', '2.4.0p12', 'cee'),
+                ('cee', '', 'cee'), ('cee', None, 'cee'), (None, '2.5.0', None)):
+            with self.subTest(edition=edition, version=version):
+                self.assertEqual(editions.edition_for_version(edition, version), expected)
+
+    def test_inventory_hands_the_fitting_edition(self):
+        site = MagicMock(custom_ansible_variables=[], bake_agents_after_update=False)
+        site.name, site.server_address = 'mysite', 'srv01'
+        site.settings_master.cmk_edition = 'cee'
+        site.settings_master.cmk_version = '2.5.0p21'
+        site.settings_master.pre_update_url = ''
+        with patch.object(site_syncer, 'render_jinja',
+                          side_effect=lambda text, **kwargs: text if not kwargs
+                          else f"{kwargs['CMK_EDITION']}-{kwargs['CMK_VERSION']}"):
+            data = site_syncer.SyncSites.__new__(site_syncer.SyncSites).get_site_data(site)
+        self.assertEqual(data['cmk_edition'], 'pro')
+        self.assertEqual(data['cmk_version_filename'], 'pro-2.5.0p21')
 
 
 if __name__ == '__main__':

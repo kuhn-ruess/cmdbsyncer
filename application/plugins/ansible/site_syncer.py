@@ -3,6 +3,7 @@
 Ansible Checkmk Modul
 """
 from application.plugins.checkmk.models import CheckmkSite, CheckmkSettings
+from application.plugins.checkmk.editions import edition_for_version
 from application.modules.plugin import Plugin
 from application.helpers.syncer_jinja import render_jinja
 
@@ -40,6 +41,9 @@ class SyncSites(Plugin):
         Return Inventory for site
         """
         inventory = {}
+        # Settings saved before the edition followed the version
+        edition = edition_for_version(site.settings_master.cmk_edition,
+                                      site.settings_master.cmk_version)
         if site.settings_master.server_user:
             inventory['ansible_user'] =  site.settings_master.server_user
 
@@ -49,7 +53,7 @@ class SyncSites(Plugin):
             site.settings_master.cmk_version_filename,
             replace_newlines=False,
             CMK_VERSION=site.settings_master.cmk_version,
-            CMK_EDITION=site.settings_master.cmk_edition,
+            CMK_EDITION=edition,
         )
 
         # Render user, secret, and server with syncer_jinja
@@ -66,7 +70,7 @@ class SyncSites(Plugin):
         inventory.update({
             'cmk_site': site.name,
             'inital_password': site.settings_master.inital_password,
-            'cmk_edition': site.settings_master.cmk_edition,
+            'cmk_edition': edition,
             'cmk_version': site.settings_master.cmk_version,
             'cmk_version_filename': filename,
             'installation_staging_path': site.settings_master.installation_staging_path or '',
@@ -105,7 +109,7 @@ class SyncSites(Plugin):
             'SERVER': site.server_address,
             'SITE': site.name,
             'CMK_VERSION': settings.cmk_version,
-            'CMK_EDITION': settings.cmk_edition,
+            'CMK_EDITION': edition_for_version(settings.cmk_edition, settings.cmk_version),
             'SETTINGS': settings.name,
         })
         return {

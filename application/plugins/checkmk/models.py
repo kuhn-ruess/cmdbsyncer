@@ -14,6 +14,7 @@ from application.modules.rule.models import (
 from application.models.account import Account
 from application.models.secret import Secret
 from application.helpers.stale_indexes import register_stale_index
+from .editions import edition_for_version
 
 
 
@@ -826,6 +827,10 @@ class CheckmkSettings(db.Document):
     meta = {
         'strict': False
     }
+
+    def clean(self):
+        """The edition follows the version, Checkmk 2.5 renamed them"""
+        self.cmk_edition = edition_for_version(self.cmk_edition, self.cmk_version)
 
     def set_server_ssh_key(self, key):
         """Store the SSH private key encrypted, an empty key removes it"""

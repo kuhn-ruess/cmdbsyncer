@@ -691,6 +691,8 @@ _load_real_module(
     "application.plugins.checkmk.list_source",
     os.path.join("plugins", "checkmk", "list_source.py"),
 )
+_load_real_module("application.plugins.checkmk.editions",
+                  os.path.join("plugins", "checkmk", "editions.py"))
 # cmk_rules provides folder_in_scope, imported by syncer at module load, so it
 # must be registered before the syncer module is loaded below.
 _try_load_real_module(
