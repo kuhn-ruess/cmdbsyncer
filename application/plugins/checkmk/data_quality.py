@@ -17,6 +17,7 @@ import csv
 import io
 import json
 import re
+import threading
 from datetime import datetime
 
 # Livestatus state code -> human label. Host and service states share the
@@ -572,6 +573,23 @@ def folders_with_permissions(api_folders):
     return [folders[path] for path in sorted(folders)]
 
 
+# How many folders one bulk update changes. Checkmk writes every folder
+# within the one request, so a block must stay short enough to answer
+# before the request timeout of the account.
+FOLDER_BULK_SIZE = 50
+
+
+def _folder_list(cmk):
+    """Every folder of a Checkmk site, the main folder included."""
+    data, _ = cmk.request("domain-types/folder_config/collections/all"
+                          "?parent=/&recursive=true&show_hosts=false")
+    api_folders = list((data or {}).get('value', []) or [])
+    root, _ = cmk.request("objects/folder_config/~")
+    if root:
+        api_folders.append(root)
+    return api_folders
+
+
 def find_folder_permissions(account_name):
     """
     List the folders of ``account_name`` with explicitly set permissions
@@ -579,13 +597,7 @@ def find_folder_permissions(account_name):
     """
     # pylint: disable=import-outside-toplevel
     from .cmk2 import CMK2
-    cmk = CMK2(account_name)
-    data, _ = cmk.request("domain-types/folder_config/collections/all"
-                          "?parent=/&recursive=true&show_hosts=false")
-    api_folders = list((data or {}).get('value', []) or [])
-    root, _ = cmk.request("objects/folder_config/~")
-    if root:
-        api_folders.append(root)
+    api_folders = _folder_list(CMK2(account_name))
     paths = {(f.get('extensions', {}) or {}).get('path') or '/'
              for f in api_folders}
     return {'folders': folders_with_permissions(api_folders),
@@ -596,27 +608,66 @@ def remove_folder_permissions(account_name, paths):
     """
     Remove the ``contactgroups`` attribute from each folder in ``paths``, so
     the folder inherits its permissions again and the next Checkmk export
-    sets the ones its rules ask for. Returns ``{'removed': [...],
-    'failed': [(path, error), ...]}``.
+    sets the ones its rules ask for.
+
+    One folder list says which of them still carry permissions, then bulk
+    updates change them in blocks: one request per folder, and a GET for
+    its ETag before, took long enough for a site with many folders to run
+    into the gateway timeout. A folder that has none any more is skipped,
+    Checkmk refuses a whole block that removes a missing attribute.
+    Returns ``{'removed': [...], 'skipped': [...], 'failed': [(path,
+    error), ...]}``.
     """
     # pylint: disable=import-outside-toplevel
     from .cmk2 import CMK2, CmkException
     cmk = CMK2(account_name)
-    result = {'removed': [], 'failed': []}
+    current = {x['path'] for x in folders_with_permissions(_folder_list(cmk))}
+    result = {'removed': [], 'skipped': [], 'failed': []}
+    todo = []
     for path in paths:
-        url = f"objects/folder_config/{path.replace('/', '~') or '~'}"
+        (todo if path in current else result['skipped']).append(path)
+    for start in range(0, len(todo), FOLDER_BULK_SIZE):
+        block = todo[start:start + FOLDER_BULK_SIZE]
         try:
-            folder, headers = cmk.request(url)
-            if not folder:
-                raise CmkException('folder not found')
-            if 'contactgroups' not in folder.get('extensions', {}) \
-                    .get('attributes', {}):
-                continue
-            cmk.request(url, method='PUT',
-                        data={'remove_attributes': ['contactgroups']},
-                        additional_header={'if-match': headers['etag']})
+            cmk.request("domain-types/folder_config/actions/bulk-update/invoke",
+                        method='PUT',
+                        data={'entries': [{'folder': path,
+                                           'remove_attributes': ['contactgroups']}
+                                          for path in block]})
         except CmkException as error:
-            result['failed'].append((path, str(error)))
+            result['failed'] += [(path, str(error)) for path in block]
             continue
-        result['removed'].append(path)
+        result['removed'] += block
     return result
+
+
+def _run_folder_permissions_cleanup(account_name, paths):
+    """Remove the permissions and write the outcome into the Log."""
+    # pylint: disable=import-outside-toplevel
+    from application import app, log
+    with app.app_context():
+        details = [('account', account_name)]
+        try:
+            result = remove_folder_permissions(account_name, paths)
+        except Exception as error:  # pylint: disable=broad-exception-caught
+            # A thread dying silently would leave nothing on any page
+            log.log(f"Checkmk Cleanup: folder permissions of {account_name} not removed",
+                    source="Checkmk Cleanup", details=details + [('error', str(error))])
+            return
+        details += [('removed', path) for path in result['removed']]
+        details += [('skipped', f"{path}: has no permissions any more")
+                    for path in result['skipped']]
+        details += [('error', f"{path}: {error}") for path, error in result['failed']]
+        log.log(f"Checkmk Cleanup: removed the permissions of "
+                f"{len(result['removed'])} folder(s) in {account_name}",
+                source="Checkmk Cleanup", details=details)
+
+
+def start_folder_permissions_cleanup(account_name, paths):
+    """
+    Remove the permissions in a thread, the web request returns at once.
+    The result goes into the Log.
+    """
+    threading.Thread(target=_run_folder_permissions_cleanup,
+                     args=(account_name, list(paths)), daemon=True,
+                     name=f'cmk-folder-cleanup-{account_name}').start()

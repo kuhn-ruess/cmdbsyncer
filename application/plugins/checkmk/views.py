@@ -3792,10 +3792,13 @@ class CheckmkFolderPermissionsCleanupView(BaseView):
 
     @expose('/remove', methods=['POST'])
     def remove(self):
-        """Remove the permissions of the selected folders."""
+        """
+        Start removing the permissions of the selected folders. It runs in
+        the background: on a site with many folders it takes longer than
+        a gateway in front of the Syncer waits for an answer.
+        """
         # pylint: disable=import-outside-toplevel
-        from .data_quality import remove_folder_permissions
-        from .cmk2 import CmkException
+        from .data_quality import start_folder_permissions_cleanup
 
         account_name = self._account()
         if not account_name:
@@ -3804,17 +3807,12 @@ class CheckmkFolderPermissionsCleanupView(BaseView):
         if not paths:
             flash('No folders selected', 'warning')
             return redirect(self.get_url('.index'))
-        try:
-            result = remove_folder_permissions(account_name, paths)
-        except CmkException as error:
-            flash(f"Checkmk request failed: {error}", 'error')
-            return redirect(self.get_url('.index'))
-        flash(f"Removed the permissions of {len(result['removed'])} folder(s) "
-              f"in {account_name}. Activate the changes in Checkmk, the next "
-              "Checkmk export sets the permissions of its rules again.",
+        start_folder_permissions_cleanup(account_name, paths)
+        flash(f"Removing the permissions of {len(paths)} folder(s) in {account_name} "
+              "in the background, the result appears in the Log under "
+              "'Checkmk Cleanup'. Activate the changes in Checkmk afterwards, the "
+              "next Checkmk export sets the permissions of its rules again.",
               'success')
-        for path, error in result['failed']:
-            flash(f"Folder {path}: {error}", 'error')
         return redirect(self.get_url('.index'))
 
 

@@ -16,10 +16,9 @@ data_quality.find_folder_permissions = lambda account: {
     'folders': [{'path': '/site7', 'title': 'Site 7', 'groups': ['team_a']}],
     'total': 3}
 removed = []
-def fake_remove(account, paths):
+def fake_start(account, paths):
     removed.append((account, paths))
-    return {'removed': paths, 'failed': []}
-data_quality.remove_folder_permissions = fake_remove
+data_quality.start_folder_permissions_cleanup = fake_start
 
 client.post('/login', data={'login_email': 'smoke@example.com',
                             'password': 'smoke-password', 'otp': '',
@@ -40,7 +39,7 @@ check(base + 'remove', 302, method='post',
       data={'account': 'cmk-test', 'folders': ['/site7'],
             'csrf_token': csrf(base)})
 if removed != [('cmk-test', ['/site7'])]:
-    fail(f'removal not called: {removed}')
+    fail(f'removal not started: {removed}')
 print('CLEANUP_OK')
 '''
 

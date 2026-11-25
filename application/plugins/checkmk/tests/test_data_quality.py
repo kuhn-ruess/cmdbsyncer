@@ -435,26 +435,53 @@ class TestFolderPermissionsCleanup(unittest.TestCase):
             {'path': '/b', 'title': 'b', 'groups': ['team_b']},
         ])
 
-    def test_remove_folder_permissions(self):
+    def test_remove_folder_permissions_in_bulk_blocks(self):
         from application.plugins.checkmk import data_quality  # pylint: disable=import-outside-toplevel
         cmk = Mock()
-        responses = {
-            'objects/folder_config/~': (
-                self._folder('/', {'groups': ['all']}), {'etag': 'e0'}),
-            'objects/folder_config/~a': (self._folder('/a'), {'etag': 'e1'}),
-        }
+        listing = [self._folder(f'/f{i}', {'groups': ['team']}) for i in range(3)]
+        listing.append(self._folder('/a'))
 
         def request(url, method='GET', **_kwargs):
             if method == 'PUT':
                 return None, {}
-            return responses[url]
+            if url == 'objects/folder_config/~':
+                return self._folder('/', {'groups': ['all']}), {}
+            return {'value': listing}, {}
         cmk.request.side_effect = request
-        with patch('application.plugins.checkmk.cmk2.CMK2', return_value=cmk):
-            result = data_quality.remove_folder_permissions('acc', ['/', '/a'])
-        self.assertEqual(result, {'removed': ['/'], 'failed': []})
-        put = [c for c in cmk.request.call_args_list
-               if c.kwargs.get('method') == 'PUT']
-        self.assertEqual(len(put), 1)
-        self.assertEqual(put[0].kwargs['data'],
-                         {'remove_attributes': ['contactgroups']})
-        self.assertEqual(put[0].kwargs['additional_header'], {'if-match': 'e0'})
+        with patch('application.plugins.checkmk.cmk2.CMK2', return_value=cmk), \
+             patch.object(data_quality, 'FOLDER_BULK_SIZE', 2):
+            result = data_quality.remove_folder_permissions(
+                'acc', ['/', '/f0', '/f1', '/f2', '/a'])
+        self.assertEqual(result, {'removed': ['/', '/f0', '/f1', '/f2'],
+                                  'skipped': ['/a'], 'failed': []})
+        puts = [c for c in cmk.request.call_args_list
+                if c.kwargs.get('method') == 'PUT']
+        self.assertEqual([c.args[0] for c in puts],
+                         ['domain-types/folder_config/actions/bulk-update/invoke'] * 2)
+        self.assertEqual([[e['folder'] for e in c.kwargs['data']['entries']] for c in puts],
+                         [['/', '/f0'], ['/f1', '/f2']])
+        self.assertEqual(puts[0].kwargs['data']['entries'][0]['remove_attributes'],
+                         ['contactgroups'])
+
+    def test_a_failed_block_fails_its_folders_only(self):
+        from application.plugins.checkmk import data_quality  # pylint: disable=import-outside-toplevel
+        from application.plugins.checkmk.cmk2 import CmkException  # pylint: disable=import-outside-toplevel
+        cmk = Mock()
+        listing = [self._folder(f'/f{i}', {'groups': ['team']}) for i in range(2)]
+        puts = []
+
+        def request(url, method='GET', **_kwargs):
+            if method == 'PUT':
+                puts.append(url)
+                if len(puts) == 1:
+                    raise CmkException('timeout')
+                return None, {}
+            if url == 'objects/folder_config/~':
+                return None, {}
+            return {'value': listing}, {}
+        cmk.request.side_effect = request
+        with patch('application.plugins.checkmk.cmk2.CMK2', return_value=cmk), \
+             patch.object(data_quality, 'FOLDER_BULK_SIZE', 1):
+            result = data_quality.remove_folder_permissions('acc', ['/f0', '/f1'])
+        self.assertEqual(result, {'removed': ['/f1'], 'skipped': [],
+                                  'failed': [('/f0', 'timeout')]})
