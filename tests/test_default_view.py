@@ -11,6 +11,11 @@ from unittest.mock import patch
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+# Stub modules this file put into sys.modules, removed again once the
+# module under test is loaded
+_CREATED = []
+
+
 def _stub_module(name, **attrs):
     # Augment an existing stub module if one is already registered — replacing
     # it wholesale would wipe out attributes set by tests/__init__.py (e.g.
@@ -19,6 +24,7 @@ def _stub_module(name, **attrs):
     if module is None:
         module = types.ModuleType(name)
         sys.modules[name] = module
+        _CREATED.append(name)
     for key, value in attrs.items():
         setattr(module, key, value)
     return module
@@ -113,6 +119,10 @@ def _load_default_module():
     module = importlib.util.module_from_spec(spec)
     sys.modules["application.views.default"] = module
     spec.loader.exec_module(module)
+    # A later test in this process would import the stub instead of the
+    # real package, e.g. flask_admin.model.template without LinkRowAction
+    for name in _CREATED:
+        sys.modules.pop(name, None)
     _MODULE = module
     return _MODULE
 
