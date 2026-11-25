@@ -316,6 +316,65 @@ class TestImportHosts(unittest.TestCase):
         instance.import_hosts()
         self.assertEqual(read, ['cmdb_ci_unix_server', 'cmdb_ci_db_instance'])
 
+    def test_every_class_is_read_on_its_own_and_imported_together(self):
+        instance = syncer(tables='cmdb_ci', sysparm_query='operational_status=1',
+                          ci_classes='cmdb_ci_linux_server, cmdb_ci_win_server')
+        instance.log_details = []
+        asked = []
+        names = iter(['srv01', 'srv02'])
+
+        def get_table(table, query=None, fields=None):  # pylint: disable=unused-argument
+            asked.append((table, query))
+            return [{'name': next(names)}]
+        instance.get_table = get_table
+        imported = []
+        with patch.object(snow, 'update_import_host', return_value=True), \
+             patch.object(snow.Host, 'get_host', create=True,
+                          side_effect=imported.append):
+            instance.import_hosts()
+        self.assertEqual(asked, [
+            ('cmdb_ci', 'sys_class_name=cmdb_ci_linux_server^operational_status=1'),
+            ('cmdb_ci', 'sys_class_name=cmdb_ci_win_server^operational_status=1')])
+        self.assertEqual(imported, ['srv01', 'srv02'])
+
+    def test_without_classes_the_account_query_applies(self):
+        instance = syncer(ci_classes=False)
+        asked = []
+        instance.get_table = lambda table, query=None, fields=None: asked.append(query) or []
+        list(instance._read_records('cmdb_ci'))  # pylint: disable=protected-access
+        self.assertEqual(asked, [None])
+
+
+class TestPaging(unittest.TestCase):
+    """sysparm_limit pages a table, an empty one reads it in one request"""
+
+    def _pages(self, pages, **config):
+        instance = syncer(**config)
+        sent = []
+
+        def read_page(_table, params):
+            sent.append(dict(params))
+            return pages[len(sent) - 1]
+        instance.read_page = read_page
+        return list(instance.get_table('cmdb_ci_server')), sent
+
+    def test_a_limit_pages_through_the_table(self):
+        records, sent = self._pages([[{}, {}], [{}]], sysparm_limit='2')
+        self.assertEqual(len(records), 3)
+        self.assertEqual([(x['sysparm_limit'], x['sysparm_offset']) for x in sent],
+                         [(2, 0), (2, 2)])
+
+    def test_an_empty_limit_is_not_sent(self):
+        for empty in ('', False, '0'):
+            records, sent = self._pages([[{}, {}, {}]], sysparm_limit=empty)
+            self.assertEqual(len(records), 3)
+            self.assertEqual(len(sent), 1)
+            self.assertNotIn('sysparm_limit', sent[0])
+            self.assertNotIn('sysparm_offset', sent[0])
+
+    def test_an_account_without_the_field_keeps_1000(self):
+        self.assertEqual(syncer().page_size(), 1000)
+
 
 class TestCompareHosts(unittest.TestCase):
     """Tests for SyncServiceNow.compare_hosts"""

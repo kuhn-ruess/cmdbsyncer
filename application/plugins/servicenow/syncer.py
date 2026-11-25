@@ -203,11 +203,17 @@ class SyncServiceNow(Plugin):
 
     def page_size(self):
         """
-        How many records one request asks the instance for
+        How many records one request asks the instance for, None when
+        the account leaves sysparm_limit empty: then no limit is sent and
+        a table is read in one request, the instance's own limit applies.
+        An account without the field keeps the 1000 it always had.
         """
+        value = str(self.config.get('sysparm_limit', 1000) or '').strip()
+        if not value:
+            return None
         try:
-            return int(self.config.get('sysparm_limit') or 1000)
-        except (TypeError, ValueError):
+            return int(value) if int(value) > 0 else None
+        except ValueError:
             return 1000
 
     def table_params(self, limit, offset=0, query=None, fields=None):
@@ -217,8 +223,6 @@ class SyncServiceNow(Plugin):
         read of the relationship table narrows itself that way.
         """
         params = {
-            'sysparm_limit': limit,
-            'sysparm_offset': offset,
             'sysparm_display_value': self.config.get('sysparm_display_value', 'true'),
             'sysparm_exclude_reference_link': 'true',
             # Nothing here reads the total number of records, and the
@@ -226,6 +230,9 @@ class SyncServiceNow(Plugin):
             # page of a large table slow
             'sysparm_no_count': 'true',
         }
+        if limit:
+            params['sysparm_limit'] = limit
+            params['sysparm_offset'] = offset
         if query := (self.config.get('sysparm_query') if query is None else query):
             params['sysparm_query'] = query
         if fields := (self.config.get('sysparm_fields') if fields is None else fields):
@@ -315,6 +322,7 @@ class SyncServiceNow(Plugin):
         """
         Yield all records of a ServiceNow table, paging through the
         Table API with sysparm_limit/sysparm_offset until exhausted.
+        Without a page size the table is read in one request.
         """
         limit = self.page_size()
         offset = 0
@@ -325,9 +333,29 @@ class SyncServiceNow(Plugin):
 
             yield from results
 
-            if len(results) < limit:
+            if not limit or len(results) < limit:
                 break
             offset += limit
+
+#.
+#   .-- Read one table class by class
+    def _read_records(self, table, fields=None):
+        """
+        Yield the records of a table imported as hosts. With `ci_classes`
+        every class is asked for in a request series of its own, and the
+        records of all of them come out as one table. Each class query
+        is `sys_class_name=<class>` combined with the account's own query;
+        without classes the account's query applies as it is.
+        """
+        query = str(self.config.get('sysparm_query') or '').strip()
+        classes = [x.strip() for x in str(self.config.get('ci_classes') or '').split(',')
+                   if x.strip()]
+        queries = ['^'.join(filter(None, [f"{CLASS_FIELD}={name}", query]))
+                   for name in classes] or [None]
+        for class_query in queries:
+            if class_query is not None:
+                print(f"{CC.OKGREEN} -- {CC.ENDC}Reading {table} with '{class_query}'")
+            yield from self.get_table(table, query=class_query, fields=fields)
 
 #.
 #   .-- Hostnames of a record
@@ -748,7 +776,7 @@ class SyncServiceNow(Plugin):
         in_snow = {}
         classes = {}
         records = unnamed = 0
-        for record in self.get_table(table, fields=fields or None):
+        for record in self._read_records(table, fields=fields or None):
             records += 1
             labels = self.flatten_record(record)
             names = self.record_hostnames(labels)
@@ -781,7 +809,7 @@ class SyncServiceNow(Plugin):
             print(f"{CC.OKGREEN} -- {CC.ENDC}ServiceNow: Processing table {table}")
             count = 0
 
-            for record in self.get_table(table):
+            for record in self._read_records(table):
                 labels = self.flatten_record(record)
 
                 hostnames = self.record_hostnames(labels)
