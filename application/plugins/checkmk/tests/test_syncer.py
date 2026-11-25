@@ -1751,6 +1751,97 @@ class TestSyncCMK2Misc(unittest.TestCase):
             self.syncer.handle_folders()
         self.assertEqual(self.syncer.log_details[0][0], 'error')
 
+    # ---- folder attributes no rule sets any more ----
+    def _with_folder_record(self, folders):
+        """Give the syncer an account and an earlier record of the
+        folder attributes the rules set."""
+        self.syncer.config = {'ref': 'account'}
+        entry = Mock()
+        entry.content = {'folders': folders}
+        cache = patch('application.plugins.checkmk.models.CheckmkObjectCache')
+        mock_cache = cache.start()
+        self.addCleanup(cache.stop)
+        mock_cache.objects.return_value.first.return_value = entry
+        return entry
+
+    @patch('builtins.print')
+    def test_handle_folders_removes_attribute_no_rule_sets(self, _print):
+        """Contact groups set by an earlier export and no longer set by any
+        rule are removed, the record forgets them."""
+        entry = self._with_folder_record([['/f', ['city', 'contactgroups']]])
+        self.syncer.custom_folder_attributes = {'/f': {'city': 'Berlin'}}
+        self.syncer.existing_folders_attributes = {'/f': {
+            'city': 'Berlin', 'contactgroups': {'groups': ['team_a']}}}
+        with patch.object(self.syncer, 'request') as mock_req:
+            mock_req.side_effect = [
+                ({'title': 'F'}, {'etag': 'e1'}),
+                (None, {'etag': 'e2'}),
+            ]
+            self.syncer.handle_folders()
+        self.assertEqual(mock_req.call_args_list[1].kwargs['data'],
+                         {'remove_attributes': ['contactgroups']})
+        self.assertEqual(entry.content, {'folders': [['/f', ['city']]]})
+        entry.save.assert_called_once()
+
+    @patch('builtins.print')
+    def test_handle_folders_removes_from_folder_without_hosts(self, _print):
+        """A folder no host goes to any more loses the attributes too."""
+        entry = self._with_folder_record([['/f', ['contactgroups']]])
+        self.syncer.existing_folders_attributes = {'/f': {
+            'contactgroups': {'groups': ['team_a']}}}
+        with patch.object(self.syncer, 'request') as mock_req:
+            mock_req.side_effect = [
+                ({'title': 'F'}, {'etag': 'e1'}),
+                (None, {'etag': 'e2'}),
+            ]
+            self.syncer.handle_folders()
+        self.assertEqual(mock_req.call_args_list[1].kwargs['data'],
+                         {'remove_attributes': ['contactgroups']})
+        self.assertEqual(entry.content, {'folders': []})
+
+    def test_handle_folders_keeps_attribute_in_limit_mode(self):
+        """A limited export does not know every host, nothing is removed
+        and the record keeps the attribute."""
+        entry = self._with_folder_record([['/f', ['contactgroups']]])
+        self.syncer.limit = True
+        self.syncer.custom_folder_attributes = {'/f': {'city': 'Berlin'}}
+        self.syncer.existing_folders_attributes = {'/f': {
+            'city': 'Berlin', 'contactgroups': {'groups': ['team_a']}}}
+        with patch.object(self.syncer, 'request') as mock_req:
+            self.syncer.handle_folders()
+            mock_req.assert_not_called()
+        self.assertEqual(entry.content,
+                         {'folders': [['/f', ['city', 'contactgroups']]]})
+
+    def test_handle_folders_keeps_attribute_when_a_host_failed(self):
+        self._with_folder_record([['/f', ['contactgroups']]])
+        self.syncer.failed_hosts = ['srv01']
+        self.syncer.existing_folders_attributes = {'/f': {
+            'contactgroups': {'groups': ['team_a']}}}
+        with patch.object(self.syncer, 'request') as mock_req:
+            self.syncer.handle_folders()
+            mock_req.assert_not_called()
+
+    def test_handle_folders_never_removes_unrecorded_attribute(self):
+        """An attribute set in Checkmk by hand is not touched."""
+        entry = self._with_folder_record([])
+        self.syncer.custom_folder_attributes = {'/f': {'city': 'Berlin'}}
+        self.syncer.existing_folders_attributes = {'/f': {
+            'city': 'Berlin', 'contactgroups': {'groups': ['team_a']}}}
+        with patch.object(self.syncer, 'request') as mock_req:
+            self.syncer.handle_folders()
+            mock_req.assert_not_called()
+        self.assertEqual(entry.content, {'folders': [['/f', ['city']]]})
+
+    def test_handle_folders_retries_removal_after_failure(self):
+        entry = self._with_folder_record([['/f', ['contactgroups']]])
+        self.syncer.existing_folders_attributes = {'/f': {
+            'contactgroups': {'groups': ['team_a']}}}
+        with patch.object(self.syncer, 'request',
+                          side_effect=CmkException("nope")):
+            self.syncer.handle_folders()
+        entry.save.assert_not_called()
+
     # ---- update_cluster_nodes with real change ----
     def test_update_cluster_nodes_sends_update_on_change(self):
         with patch.object(self.syncer, 'request') as mock_req:

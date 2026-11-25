@@ -59,6 +59,9 @@ def merge_folder_attributes(existing, new):
 # the title, the site) or a structure (contact groups, labels, parents).
 BOOLEAN_FOLDER_ATTRIBUTES = ('bake_agent_package',)
 
+# Cache group of the record: folder -> attribute names the rules set
+FOLDER_RECORD_GROUP = 'folder_attributes'
+
 
 def drop_unset_folder_values(folder, attributes):
     """
@@ -356,7 +359,23 @@ class SyncCMK2(CMK2):
         """
 
         print(f"{CC.OKGREEN} -- {CC.ENDC}Check if we need to update Folders")
-        for folder_name, target_attributes in self.custom_folder_attributes.items():
+        record_entry, recorded = self._load_folder_record()
+        cleanup = self._folder_cleanup_allowed()
+        folders = dict(self.custom_folder_attributes)
+        if cleanup:
+            for path in recorded:
+                folders.setdefault(path, {})
+        new_record = {}
+        for folder_name, target_attributes in folders.items():
+            managed = {name for name in target_attributes if name != 'title'}
+            left_out = recorded.get(folder_name, set()) - managed
+            # Kept until the folder is done, so a failed run retries
+            new_record[folder_name] = managed | left_out
+            if folder_name not in self.custom_folder_attributes and \
+                    folder_name not in self.existing_folders_attributes:
+                # No host goes there and Checkmk no longer has the folder
+                del new_record[folder_name]
+                continue
             if self.folder_listing_failed and \
                     folder_name not in self.existing_folders_attributes and \
                     not self._read_folder(folder_name, target_attributes):
@@ -373,6 +392,14 @@ class SyncCMK2(CMK2):
                 and (cmk_attributes[name] is None
                      or isinstance(cmk_attributes[name], bool))
             ]
+            # An attribute a rule set in an earlier export and no rule sets
+            # any more (e.g. contact groups) is removed from the folder.
+            removable = cleanup and folder_within_scope(
+                folder_name, self.config.get('limit_by_folders'))
+            if removable:
+                remove_attributes += [
+                    name for name in sorted(left_out)
+                    if name in cmk_attributes and name not in remove_attributes]
             for attr_name, attr_value in target_attributes.items():
                 if attr_name not in cmk_attributes:
                     add_attributes[attr_name] = attr_value
@@ -436,6 +463,56 @@ class SyncCMK2(CMK2):
                     continue
                 print(f"{CC.OKGREEN} *{CC.ENDC} Updated Attributes on Folder: {folder_name} "\
                       f"({payload})")
+            if removable:
+                new_record[folder_name] = managed
+        if not cleanup:
+            for path, names in recorded.items():
+                new_record[path] = new_record.get(path, set()) | names
+        self._save_folder_record(record_entry, recorded, new_record)
+
+    def _folder_cleanup_allowed(self):
+        """
+        True when this export knows the folder options of every host, so an
+        attribute no rule sets any more can be removed from its folder.
+        """
+        return bool(self.config.get('ref')) and not self.limit \
+            and not self.failed_hosts \
+            and not self.folder_listing_failed
+
+    def _load_folder_record(self):
+        """
+        Read which folder attributes the rules set in earlier exports.
+
+        Returns:
+            tuple: (the cache entry or None, dict folder -> set of names)
+        """
+        if not self.config.get('ref'):
+            return None, {}
+        # pylint: disable-next=import-outside-toplevel
+        from application.plugins.checkmk.models import CheckmkObjectCache
+        entry = CheckmkObjectCache.objects(
+            cache_group=FOLDER_RECORD_GROUP, account=self.config['ref']).first()
+        folders = entry.content.get('folders') if entry else None
+        if not isinstance(folders, list):
+            return entry, {}
+        return entry, {path: set(names) for path, names in folders}
+
+    def _save_folder_record(self, entry, recorded, new_record):
+        """
+        Store which folder attributes the rules set, when it changed.
+        The folders are a list, a folder path is no valid Mongo key.
+        """
+        new_record = {path: names for path, names in new_record.items() if names}
+        if not self.config.get('ref') or new_record == recorded:
+            return
+        if entry is None:
+            # pylint: disable-next=import-outside-toplevel
+            from application.plugins.checkmk.models import CheckmkObjectCache
+            entry = CheckmkObjectCache(cache_group=FOLDER_RECORD_GROUP,
+                                       account=self.config['ref'])
+        entry.content = {'folders': [[path, sorted(names)]
+                                     for path, names in sorted(new_record.items())]}
+        entry.save()
 
     def _read_folder(self, folder_name, target_attributes):
         """
