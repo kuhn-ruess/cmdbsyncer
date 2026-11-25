@@ -1962,10 +1962,20 @@ class CheckmkSettingsView(DefaultModelView):
                              'schedule_last_status', 'schedule_last_message',
                              'schedule_last_version')
 
-    # One line, also for the inline edit of the list. The weekday gets a
-    # choice for no schedule.
+    # One line, also for the inline edit of the list: a StringField without
+    # max_length would be a resizable text area. The weekday gets a choice
+    # for no schedule.
     form_overrides = {
-        'cmk_version': StringField,
+        **{field: StringField for field in (
+            'name', 'server_user', 'cmk_version', 'cmk_version_filename',
+            'installation_staging_path', 'inital_password',
+            'subscription_username', 'subscription_password', 'download_proxy',
+            'cmk_user', 'cmk_secret', 'cmk_server_address',
+            'bakery_key_id', 'bakery_passphrase',
+            'pre_update_url', 'pre_update_token',
+            'pre_update_success_field', 'pre_update_success_value',
+            'webserver_certificate', 'webserver_certificate_private_key',
+            'webserver_certificate_intermediate')},
         'schedule_weekday': SelectField,
         'pre_update_body': TextAreaField,
     }
