@@ -316,33 +316,26 @@ class TestImportHosts(unittest.TestCase):
         instance.import_hosts()
         self.assertEqual(read, ['cmdb_ci_unix_server', 'cmdb_ci_db_instance'])
 
-    def test_every_class_is_read_on_its_own_and_imported_together(self):
-        instance = syncer(tables='cmdb_ci', sysparm_query='operational_status=1',
-                          ci_classes='cmdb_ci_linux_server, cmdb_ci_win_server')
-        instance.log_details = []
-        asked = []
-        names = iter(['srv01', 'srv02'])
 
-        def get_table(table, query=None, fields=None):  # pylint: disable=unused-argument
-            asked.append((table, query))
-            return [{'name': next(names)}]
-        instance.get_table = get_table
-        imported = []
-        with patch.object(snow, 'update_import_host', return_value=True), \
-             patch.object(snow.Host, 'get_host', create=True,
-                          side_effect=imported.append):
-            instance.import_hosts()
-        self.assertEqual(asked, [
-            ('cmdb_ci', 'sys_class_name=cmdb_ci_linux_server^operational_status=1'),
-            ('cmdb_ci', 'sys_class_name=cmdb_ci_win_server^operational_status=1')])
-        self.assertEqual(imported, ['srv01', 'srv02'])
+class TestQueryTable(unittest.TestCase):
+    """Query Table reads one table or several"""
 
-    def test_without_classes_the_account_query_applies(self):
-        instance = syncer(ci_classes=False)
+    def test_the_records_of_every_table_come_together(self):
+        instance = syncer()
         asked = []
-        instance.get_table = lambda table, query=None, fields=None: asked.append(query) or []
-        list(instance._read_records('cmdb_ci'))  # pylint: disable=protected-access
-        self.assertEqual(asked, [None])
+
+        def read_page(table, params):
+            asked.append((table, params['sysparm_limit']))
+            return [{'name': f'{table}-srv'}]
+        instance.read_page = read_page
+        result = instance.query_table('cmdb_ci_linux_server, cmdb_ci_win_server', limit=5)
+        self.assertEqual(asked, [('cmdb_ci_linux_server', 5), ('cmdb_ci_win_server', 5)])
+        self.assertEqual([(x['table'], x['hostname']) for x in result['records']],
+                         [('cmdb_ci_linux_server', 'cmdb_ci_linux_server-srv'),
+                          ('cmdb_ci_win_server', 'cmdb_ci_win_server-srv')])
+        self.assertEqual(result['urls'], [
+            'https://instance.service-now.com/api/now/table/cmdb_ci_linux_server',
+            'https://instance.service-now.com/api/now/table/cmdb_ci_win_server'])
 
 
 class TestPaging(unittest.TestCase):
@@ -388,6 +381,17 @@ class TestCompareHosts(unittest.TestCase):
             return records
         instance.get_table = get_table
         return instance.compare_hosts('cmdb_ci', hostnames), asked
+
+    def test_several_tables_are_compared_together(self):
+        instance = syncer()
+        read = {'cmdb_ci_linux_server': [{'name': 'srv01', 'sys_class_name': 'linux'}],
+                'cmdb_ci_win_server': [{'name': 'srv02', 'sys_class_name': 'win'}]}
+        instance.get_table = lambda table, query=None, fields=None: read[table]
+        result = instance.compare_hosts('cmdb_ci_linux_server, cmdb_ci_win_server',
+                                        ['srv01', 'srv02'])
+        self.assertEqual(result['records'], 2)
+        self.assertEqual(self._names(result['matched']), ['srv01', 'srv02'])
+        self.assertEqual(len(result['urls']), 2)
 
     @staticmethod
     def _names(entries):

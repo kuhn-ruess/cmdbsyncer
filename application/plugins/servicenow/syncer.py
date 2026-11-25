@@ -119,6 +119,14 @@ def compare_names(in_snow, classes, hostnames):
     }
 
 
+def split_tables(value):
+    """
+    The tables of a comma separated list. An empty custom field arrives
+    as False, so it cannot be split as it is.
+    """
+    return [x.strip() for x in str(value or '').split(',') if x.strip()]
+
+
 def parse_inventorize_tables(value):
     """
     The tables whose records are attached to an existing host, as
@@ -336,26 +344,6 @@ class SyncServiceNow(Plugin):
             if not limit or len(results) < limit:
                 break
             offset += limit
-
-#.
-#   .-- Read one table class by class
-    def _read_records(self, table, fields=None):
-        """
-        Yield the records of a table imported as hosts. With `ci_classes`
-        every class is asked for in a request series of its own, and the
-        records of all of them come out as one table. Each class query
-        is `sys_class_name=<class>` combined with the account's own query;
-        without classes the account's query applies as it is.
-        """
-        query = str(self.config.get('sysparm_query') or '').strip()
-        classes = [x.strip() for x in str(self.config.get('ci_classes') or '').split(',')
-                   if x.strip()]
-        queries = ['^'.join(filter(None, [f"{CLASS_FIELD}={name}", query]))
-                   for name in classes] or [None]
-        for class_query in queries:
-            if class_query is not None:
-                print(f"{CC.OKGREEN} -- {CC.ENDC}Reading {table} with '{class_query}'")
-            yield from self.get_table(table, query=class_query, fields=fields)
 
 #.
 #   .-- Hostnames of a record
@@ -731,30 +719,35 @@ class SyncServiceNow(Plugin):
     _host_index = None
     _host_sys_ids = None
 
-    def query_table(self, table, limit=25):
+    def query_table(self, tables, limit=25):
         """
-        Read at most `limit` records of one table the way the import reads
-        them, without touching a single object of the syncer. Returns the
-        request it did, what the instance said about the rate limit and
-        its records as {'url':, 'params':, 'limits':, 'records':
-        [{'hostname':, 'labels':}]} — the hostname is empty for records
-        the import would skip.
+        Read at most `limit` records of each of `tables`, comma separated,
+        the way the import reads them, without touching a single object
+        of the syncer. Returns the requests it did, what the instance said
+        about the rate limit and the records of all tables as {'urls':,
+        'params':, 'limits':, 'records': [{'table':, 'hostname':,
+        'labels':}]} — the hostname is empty for records the import
+        would skip.
         """
         params = self.table_params(limit)
-        records = [self.flatten_record(x, keep_empty=True)
-                   for x in self.read_page(table, params)]
+        records = []
+        for table in split_tables(tables):
+            records += [{'table': table, 'labels': self.flatten_record(x, keep_empty=True)}
+                        for x in self.read_page(table, params)]
+        for record in records:
+            record['hostname'] = ', '.join(self.record_hostnames(record['labels']))
         return {
-            'url': self.table_url(table),
+            'urls': [self.table_url(x) for x in split_tables(tables)],
             'params': params,
             'limits': self.last_rate_limit or {},
-            'records': [{'hostname': ', '.join(self.record_hostnames(x)), 'labels': x}
-                        for x in records],
+            'records': records,
         }
 
-    def compare_hosts(self, table, hostnames):
+    def compare_hosts(self, tables, hostnames):
         """
-        Read every record of one table the way the import does and
-        compare the names with `hostnames`, the hosts of the syncer.
+        Read every record of `tables`, comma separated, the way the import
+        does and compare the names of all of them together with
+        `hostnames`, the hosts of the syncer.
         Names are compared without case, ServiceNow often keeps them in
         capitals. Changes nothing.
 
@@ -776,7 +769,8 @@ class SyncServiceNow(Plugin):
         in_snow = {}
         classes = {}
         records = unnamed = 0
-        for record in self._read_records(table, fields=fields or None):
+        for record in (x for table in split_tables(tables)
+                       for x in self.get_table(table, fields=fields or None)):
             records += 1
             labels = self.flatten_record(record)
             names = self.record_hostnames(labels)
@@ -786,7 +780,7 @@ class SyncServiceNow(Plugin):
                 in_snow.setdefault(name.lower(), name)
                 classes.setdefault(name.lower(), set()).add(labels.get(CLASS_FIELD, ''))
         return {
-            'url': self.table_url(table),
+            'urls': [self.table_url(x) for x in split_tables(tables)],
             'params': self.table_params(self.page_size(), fields=fields or None),
             'limits': self.last_rate_limit or {},
             'records': records,
@@ -800,8 +794,7 @@ class SyncServiceNow(Plugin):
         """
         Import objects from ServiceNow tables into the Syncer
         """
-        # An empty custom field arrives as False, so it cannot be split
-        tables = [x.strip() for x in (self.config.get('tables') or '').split(',') if x.strip()]
+        tables = split_tables(self.config.get('tables'))
         if not tables:
             raise ServiceNowError("The account has no table in 'tables'")
 
@@ -809,7 +802,7 @@ class SyncServiceNow(Plugin):
             print(f"{CC.OKGREEN} -- {CC.ENDC}ServiceNow: Processing table {table}")
             count = 0
 
-            for record in self._read_records(table):
+            for record in self.get_table(table):
                 labels = self.flatten_record(record)
 
                 hostnames = self.record_hostnames(labels)

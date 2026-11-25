@@ -110,6 +110,9 @@ class TestSavedTables(unittest.TestCase):
     def test_no_table_keeps_the_list(self):
         self.assertEqual(views.saved_tables('a', ''), 'a')
 
+    def test_several_tables_of_the_form_are_the_list(self):
+        self.assertEqual(views.saved_tables('a,b', 'c, d'), 'c,d')
+
 
 if __name__ == '__main__':
     unittest.main()

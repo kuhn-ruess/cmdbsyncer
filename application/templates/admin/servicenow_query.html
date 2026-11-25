@@ -38,11 +38,12 @@
                 <div class="form-group col-md-3">
                     <label for="table">Table</label>
                     <input type="text" class="form-control" id="table" name="table"
-                           value="{{ form.table }}" list="tables" required autofocus
+                           value="{{ form.table }}" required autofocus
                            placeholder="e.g. cmdb_ci_server"/>
-                    <datalist id="tables"></datalist>
                     <small class="form-text text-muted">
-                        One table. The account's own tables are offered here.
+                        One table or several, comma separated, read one
+                        after the other and shown together. The account's
+                        own tables are filled in.
                     </small>
                 </div>
                 <div class="form-group col-md-2">
@@ -140,7 +141,7 @@
             </button>
             {% endif %}
             <small class="form-text text-muted">
-                Compare reads every record of the table with the query and
+                Compare reads every record of the tables with the query and
                 holds the names against the hosts an export of the syncer
                 would send. Max. results does not apply, a large table
                 takes a while.
@@ -178,7 +179,8 @@
          'classes': True},
     ] %}
     <p>
-        Used request: <code>{{ comparison.url }}</code><br/>
+        Used request{% if comparison.urls | length > 1 %}s{% endif %}:
+        {% for url in comparison.urls %}<code>{{ url }}</code><br/>{% endfor %}
         {% for key, value in comparison.params.items() | sort %}
         <code>{{ key }}={{ value }}</code>{% if not loop.last %}, {% endif %}
         {% endfor %}
@@ -277,7 +279,8 @@
 
     {% if result %}
     <p>
-        Used request: <code>{{ result.url }}</code><br/>
+        Used request{% if result.urls | length > 1 %}s{% endif %}:
+        {% for url in result.urls %}<code>{{ url }}</code><br/>{% endfor %}
         {% for key, value in result.params.items() | sort %}
         <code>{{ key }}={{ value }}</code>{% if not loop.last %}, {% endif %}
         {% endfor %}
@@ -295,7 +298,10 @@
     <div class="card app-card mb-4">
         <div class="card-header">
             {{ result.records | length }} record(s) found
-            {% if result.records | length >= limit %}
+            {% if result.urls | length > 1 %}
+            <small class="text-muted ml-1">max. {{ limit }} per table</small>
+            {% endif %}
+            {% if result.records | length >= limit * (result.urls | length) %}
             <span class="badge badge-warning ml-1">limit reached</span>
             {% endif %}
         </div>
@@ -318,6 +324,9 @@
                     {% endif %}
                     <span class="badge badge-light ml-1">
                         {{ record.labels | length }} field(s)</span>
+                    {% if result.urls | length > 1 %}
+                    <span class="badge badge-info ml-1">{{ record.table }}</span>
+                    {% endif %}
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -349,7 +358,6 @@
         (function () {
             var accounts = {{ accounts | tojson }};
             var account = document.getElementById('account');
-            var tables = document.getElementById('tables');
             var fields = {
                 table: document.getElementById('table'),
                 api_path: document.getElementById('api_path'),
@@ -366,34 +374,19 @@
                 return null;
             }
 
-            function offerTables(selected) {
-                tables.innerHTML = '';
-                if (!selected) { return; }
-                selected.tables.forEach(function (name) {
-                    var option = document.createElement('option');
-                    option.value = name;
-                    tables.appendChild(option);
-                });
-            }
-
             // Picking an account fills the form with its settings, so a
             // query starts from what the import would do and every field
             // can be changed for the try without touching the account.
             account.addEventListener('change', function () {
                 var selected = current();
-                offerTables(selected);
                 if (!selected) { return; }
-                fields.table.value = selected.tables.length ? selected.tables[0] : '';
+                fields.table.value = selected.tables.join(', ');
                 fields.api_path.value = selected.api_path;
                 fields.hostname_field.value = selected.hostname_field;
                 fields.sysparm_query.value = selected.sysparm_query;
                 fields.sysparm_fields.value = selected.sysparm_fields;
                 fields.sysparm_display_value.value = selected.sysparm_display_value;
             });
-
-            // On a result page the account is already chosen, only its
-            // table list is missing
-            offerTables(current());
 
             // The query as one condition per line and one list value per
             // indented line. Splitting on ^ and , and joining with them

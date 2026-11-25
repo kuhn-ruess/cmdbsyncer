@@ -8,7 +8,7 @@ from flask_login import current_user
 from application.models.account import Account, CustomEntry
 from application.models.host import Host
 
-from .syncer import ServiceNowError, SyncServiceNow
+from .syncer import ServiceNowError, SyncServiceNow, split_tables
 
 DEFAULT_LIMIT = 25
 MAX_LIMIT = 500
@@ -16,10 +16,13 @@ MAX_LIMIT = 500
 
 def saved_tables(current, table):
     """
-    The table list of an account after a save: a table the account does
-    not read yet replaces a single one and joins several
+    The table list of an account after a save: several tables of the form
+    are the list, a single one the account does not read yet replaces a
+    single one and joins several
     """
-    tables = [x.strip() for x in current.split(',') if x.strip()]
+    tables = split_tables(current)
+    if len(split_tables(table)) > 1:
+        return ','.join(split_tables(table))
     if not table or table in tables:
         return ','.join(tables)
     if len(tables) <= 1:
@@ -52,7 +55,7 @@ class ServiceNowQueryView(BaseView):
             'name': account.name,
             'address': account.address,
             'api_path': account.custom_field('api_path', '/api/now'),
-            'tables': [x.strip() for x in account.custom_field('tables').split(',') if x.strip()],
+            'tables': split_tables(account.custom_field('tables')),
             'hostname_field': account.custom_field('hostname_field', 'name'),
             'sysparm_query': account.custom_field('sysparm_query'),
             'sysparm_fields': account.custom_field('sysparm_fields'),
