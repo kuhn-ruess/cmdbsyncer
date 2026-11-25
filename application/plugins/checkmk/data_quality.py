@@ -550,3 +550,73 @@ def assign_cmdb_templates(hostnames, template_name, template_scope=None):
         template, [name for name in hostnames if name in allowed])
     result['missing'] += [name for name in hostnames if name not in allowed]
     return result
+
+
+def folders_with_permissions(api_folders):
+    """
+    Pick the folders that carry their own ``contactgroups`` attribute (the
+    folder permissions) from a Checkmk folder list. Returns a list of
+    ``{'path': ..., 'title': ..., 'groups': [...]}`` sorted by path.
+    """
+    folders = {}
+    for folder in api_folders:
+        ext = folder.get('extensions', {}) or {}
+        contactgroups = (ext.get('attributes', {}) or {}).get('contactgroups')
+        if not contactgroups:
+            continue
+        path = ext.get('path') or '/'
+        groups = contactgroups.get('groups', []) \
+            if isinstance(contactgroups, dict) else []
+        folders[path] = {'path': path, 'title': folder.get('title', ''),
+                         'groups': list(groups or [])}
+    return [folders[path] for path in sorted(folders)]
+
+
+def find_folder_permissions(account_name):
+    """
+    List the folders of ``account_name`` with explicitly set permissions
+    (contact groups), the main folder included.
+    """
+    # pylint: disable=import-outside-toplevel
+    from .cmk2 import CMK2
+    cmk = CMK2(account_name)
+    data, _ = cmk.request("domain-types/folder_config/collections/all"
+                          "?parent=/&recursive=true&show_hosts=false")
+    api_folders = list((data or {}).get('value', []) or [])
+    root, _ = cmk.request("objects/folder_config/~")
+    if root:
+        api_folders.append(root)
+    paths = {(f.get('extensions', {}) or {}).get('path') or '/'
+             for f in api_folders}
+    return {'folders': folders_with_permissions(api_folders),
+            'total': len(paths)}
+
+
+def remove_folder_permissions(account_name, paths):
+    """
+    Remove the ``contactgroups`` attribute from each folder in ``paths``, so
+    the folder inherits its permissions again and the next Checkmk export
+    sets the ones its rules ask for. Returns ``{'removed': [...],
+    'failed': [(path, error), ...]}``.
+    """
+    # pylint: disable=import-outside-toplevel
+    from .cmk2 import CMK2, CmkException
+    cmk = CMK2(account_name)
+    result = {'removed': [], 'failed': []}
+    for path in paths:
+        url = f"objects/folder_config/{path.replace('/', '~') or '~'}"
+        try:
+            folder, headers = cmk.request(url)
+            if not folder:
+                raise CmkException('folder not found')
+            if 'contactgroups' not in folder.get('extensions', {}) \
+                    .get('attributes', {}):
+                continue
+            cmk.request(url, method='PUT',
+                        data={'remove_attributes': ['contactgroups']},
+                        additional_header={'if-match': headers['etag']})
+        except CmkException as error:
+            result['failed'].append((path, str(error)))
+            continue
+        result['removed'].append(path)
+    return result

@@ -22,6 +22,7 @@ docu_links = {
     'cmk_password_store': 'https://docs.cmdbsyncer.de/checkmk/password_store/',
     'cmk_ldap_connections': 'https://docs.cmdbsyncer.de/checkmk/ldap_connections/',
     'cmk_folders': 'https://docs.cmdbsyncer.de/checkmk/folders/',
+    'cmk_cleanups': 'https://docs.cmdbsyncer.de/checkmk/cleanups/',
     'rules_in_git': 'https://docs.cmdbsyncer.de/basics/rules_in_git/',
     'rule_import_export': 'https://docs.cmdbsyncer.de/basics/rule_import_export/',
     'attribute_values': 'https://docs.cmdbsyncer.de/basics/attribute_values/',

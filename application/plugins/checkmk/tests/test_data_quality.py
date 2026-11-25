@@ -408,3 +408,53 @@ class TestFetchHelpers(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestFolderPermissionsCleanup(unittest.TestCase):
+    """Find and remove the explicitly set folder permissions."""
+
+    @staticmethod
+    def _folder(path, contactgroups=None):
+        attributes = {'tag_x': 'y'}
+        if contactgroups is not None:
+            attributes['contactgroups'] = contactgroups
+        return {'title': path.strip('/') or 'Main',
+                'extensions': {'path': path, 'attributes': attributes}}
+
+    def test_folders_with_permissions_picks_set_contactgroups(self):
+        from application.plugins.checkmk.data_quality import (  # pylint: disable=import-outside-toplevel
+            folders_with_permissions)
+        result = folders_with_permissions([
+            self._folder('/b', {'groups': ['team_b'], 'use': True}),
+            self._folder('/a'),
+            self._folder('/', {'groups': ['all']}),
+            self._folder('/b', {'groups': ['team_b'], 'use': True}),
+        ])
+        self.assertEqual(result, [
+            {'path': '/', 'title': 'Main', 'groups': ['all']},
+            {'path': '/b', 'title': 'b', 'groups': ['team_b']},
+        ])
+
+    def test_remove_folder_permissions(self):
+        from application.plugins.checkmk import data_quality  # pylint: disable=import-outside-toplevel
+        cmk = Mock()
+        responses = {
+            'objects/folder_config/~': (
+                self._folder('/', {'groups': ['all']}), {'etag': 'e0'}),
+            'objects/folder_config/~a': (self._folder('/a'), {'etag': 'e1'}),
+        }
+
+        def request(url, method='GET', **_kwargs):
+            if method == 'PUT':
+                return None, {}
+            return responses[url]
+        cmk.request.side_effect = request
+        with patch('application.plugins.checkmk.cmk2.CMK2', return_value=cmk):
+            result = data_quality.remove_folder_permissions('acc', ['/', '/a'])
+        self.assertEqual(result, {'removed': ['/'], 'failed': []})
+        put = [c for c in cmk.request.call_args_list
+               if c.kwargs.get('method') == 'PUT']
+        self.assertEqual(len(put), 1)
+        self.assertEqual(put[0].kwargs['data'],
+                         {'remove_attributes': ['contactgroups']})
+        self.assertEqual(put[0].kwargs['additional_header'], {'if-match': 'e0'})

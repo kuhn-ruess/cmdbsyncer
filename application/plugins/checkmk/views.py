@@ -3745,6 +3745,79 @@ class CheckmkDataQualityView(_DataQualityAccess, BaseView):
         return redirect(self.get_url('.index'))
 
 
+class CheckmkFolderPermissionsCleanupView(BaseView):
+    """
+    Cleanup: list the folders of a Checkmk account with explicitly set
+    permissions (contact groups) and remove them for the selected folders,
+    so the next Checkmk export sets the permissions of its rules again.
+    Changes Checkmk, so it needs the full ``checkmk`` right.
+    """
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
+
+    def _render(self, selected_account='', result=None):
+        return self.render('admin/checkmk_cleanup_folder_permissions.html',
+                           accounts=_DataQualityAccess._accounts(),  # pylint: disable=protected-access
+                           selected_account=selected_account,
+                           result=result,
+                           docu_link=docu_links['cmk_cleanups'])
+
+    def _account(self):
+        """The posted account, or None after flashing why not."""
+        account_name = request.form.get('account')
+        if account_name not in _DataQualityAccess._accounts():  # pylint: disable=protected-access
+            flash('Select a Checkmk account first', 'error')
+            return None
+        return account_name
+
+    @expose('/', methods=['GET', 'POST'])
+    def index(self):
+        """Pick the account and, on POST, list its folders with permissions."""
+        # pylint: disable=import-outside-toplevel
+        from .data_quality import find_folder_permissions
+        from .cmk2 import CmkException
+        if request.method == 'GET':
+            return self._render()
+        account_name = self._account()
+        if not account_name:
+            return redirect(self.get_url('.index'))
+        try:
+            result = find_folder_permissions(account_name)
+        except CmkException as error:
+            flash(f"Checkmk request failed: {error}", 'error')
+            return self._render(account_name)
+        return self._render(account_name, result)
+
+    @expose('/remove', methods=['POST'])
+    def remove(self):
+        """Remove the permissions of the selected folders."""
+        # pylint: disable=import-outside-toplevel
+        from .data_quality import remove_folder_permissions
+        from .cmk2 import CmkException
+
+        account_name = self._account()
+        if not account_name:
+            return redirect(self.get_url('.index'))
+        paths = [p for p in request.form.getlist('folders') if p.strip()]
+        if not paths:
+            flash('No folders selected', 'warning')
+            return redirect(self.get_url('.index'))
+        try:
+            result = remove_folder_permissions(account_name, paths)
+        except CmkException as error:
+            flash(f"Checkmk request failed: {error}", 'error')
+            return redirect(self.get_url('.index'))
+        flash(f"Removed the permissions of {len(result['removed'])} folder(s) "
+              f"in {account_name}. Activate the changes in Checkmk, the next "
+              "Checkmk export sets the permissions of its rules again.",
+              'success')
+        for path, error in result['failed']:
+            flash(f"Folder {path}: {error}", 'error')
+        return redirect(self.get_url('.index'))
+
+
 class CheckmkConfigChecksView(_DataQualityAccess, BaseView):
     """
     Data Quality: Configuration Checks. Pick a Checkmk account and the

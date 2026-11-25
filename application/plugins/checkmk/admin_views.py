@@ -42,6 +42,7 @@ from .views import (
     CheckmkCacheView,
     CheckmkConfigChecksView,
     CheckmkDataQualityView,
+    CheckmkFolderPermissionsCleanupView,
     CheckmkFolderView,
     CheckmkRuleOptimizationView,
     CheckmkDCDView,
@@ -277,6 +278,14 @@ def register_admin_views(admin):
         endpoint="checkmk_config_checks",
         menu_icon_type='fa',
         menu_icon_value='fa-stethoscope',
+    ))
+    admin.add_sub_category(name="Cleanups", parent_name="Checkmk")
+    add(checks, CheckmkFolderPermissionsCleanupView(
+        name="Folder Permissions",
+        category="Cleanups",
+        endpoint="checkmk_cleanup_folder_permissions",
+        menu_icon_type='fa',
+        menu_icon_value='fa-eraser',
     ))
     add(checks, CheckmkCacheView(
         CheckmkObjectCache, name="Cache", category="Checkmk",
