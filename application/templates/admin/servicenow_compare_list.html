@@ -1,0 +1,395 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container mt-4">
+    <h3>{{ title }}</h3>
+    <p class="text-muted">
+        Account <strong>{{ form.account }}</strong>, table
+        <code>{{ form.table }}</code>, query <code>{{ form.sysparm_query }}</code>.
+        {% if form.exclude_accounts %}
+        Hosts of {{ form.exclude_accounts | join(', ') }} are left out.
+        {% endif %}
+        A click on a name shows every field of its ServiceNow records{% if compare_host %},
+        next to the attributes of the Syncer host, matched by name or by value{% endif %}.
+    </p>
+
+    {% if error %}
+    <div class="alert alert-danger">
+        <i class="fa fa-exclamation-triangle"></i> <span style="white-space: pre-line;">{{ error }}</span>
+    </div>
+    {% endif %}
+
+    {% if names is not none %}
+    <div class="form-row align-items-center mb-3">
+        <div class="col-md-4">
+            <input type="search" class="form-control" id="name_filter"
+                   placeholder="Filter names and notes" autofocus/>
+        </div>
+        <div class="col-md-8">
+            <span class="badge badge-secondary">{{ names | length }} name(s)</span>
+            <span class="badge badge-info ml-1" id="note_count">
+                {{ names | selectattr('note') | list | length }} with a note
+            </span>
+            {% if outside_query %}
+            <button type="button" class="btn btn-sm btn-outline-secondary ml-2" id="outside_query"
+                    title="Look up the hosts without a note in ServiceNow without the query, {{ chunk }} per request">
+                <i class="fa fa-search"></i> Look up outside the query
+            </button>
+            <span class="small text-muted ml-1" id="outside_progress"></span>
+            {% endif %}
+        </div>
+    </div>
+
+    {# A scroll area of its own: the header sticks to its top, the page
+       navbar scrolls away #}
+    <div class="card app-card"><div class="table-scroll" style="max-height: 80vh; overflow-y: auto;">
+        <table class="table table-sm mb-0" id="name_table">
+            <thead>
+                <tr><th>Name</th>{% if classes %}<th>Class in ServiceNow</th>{% endif %}<th>Note</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for entry in names %}
+                <tr class="list-name" data-name="{{ entry.name }}"
+                    data-search="{{ (entry.name ~ ' ' ~ entry.note) | lower }}">
+                    <td class="name-cell">
+                        {%- if entry.records -%}
+                        <a href="#" class="record-open" data-records='{{ entry.records | tojson }}'
+                           {% if compare_host %}data-host="{{ entry.name }}"{% endif %}
+                           title="Show the fields in ServiceNow">{{ entry.name }}</a>
+                        {%- else -%}{{ entry.name }}{%- endif -%}
+                    </td>
+                    {% if classes %}<td>{{ entry['class'] }}</td>{% endif %}
+                    <td class="note-cell">{{ entry.note }}</td>
+                    <td class="text-right">
+                        {%- if hosts -%}
+                        <a href="{{ url_for('host.debug', hostname=entry.name) }}" target="_blank"
+                           title="Debug the Syncer host"><i class="fa fa-bug"></i></a>
+                        {%- endif -%}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div></div>
+
+    {# The fields of one name, beside the list so it can still be scrolled #}
+    <div class="card app-card shadow" id="record_panel"
+         style="display: none; position: fixed; top: 0; right: 0; bottom: 0; width: min(55rem, 60vw);
+                z-index: 1040; border-radius: 0; flex-direction: column;">
+        <div class="card-header d-flex align-items-center">
+            <strong id="panel_title" class="mr-auto text-truncate"></strong>
+            <button type="button" class="close ml-2" id="panel_close" title="Close (Esc)">&times;</button>
+        </div>
+        <div class="px-3 pt-2 form-inline">
+            <input type="search" class="form-control form-control-sm" id="field_filter"
+                   placeholder="Filter fields and values"/>
+            {% if compare_host %}
+            <label class="ml-3 small">
+                <input type="checkbox" class="mr-1" id="all_fields"/>
+                All fields, not only the matched ones
+            </label>
+            {% endif %}
+        </div>
+        <div class="card-body pt-2" id="panel_body" style="overflow-y: auto; flex: 1;"></div>
+    </div>
+    <script>
+        (function () {
+            var recordUrl = '{{ url_for('.record', **record_args) | safe }}';
+
+            document.getElementById('name_filter').addEventListener('input', function () {
+                var term = this.value.trim().toLowerCase();
+                document.querySelectorAll('.list-name').forEach(function (row) {
+                    row.hidden = term !== '' && row.dataset.search.indexOf(term) === -1;
+                });
+            });
+
+            var panel = document.getElementById('record_panel');
+            var panelBody = document.getElementById('panel_body');
+            var fieldFilter = document.getElementById('field_filter');
+            var allFields = document.getElementById('all_fields');
+            var activeRow = null;
+
+            // The filter and All fields stay set from one name to the
+            // next, so the same field can be checked host after host
+            function applyFilter() {
+                var term = fieldFilter.value.trim().toLowerCase();
+                panelBody.querySelectorAll('tbody tr').forEach(function (row) {
+                    row.hidden = (allFields && !allFields.checked && !row.dataset.both)
+                        || (term !== '' && row.dataset.search.indexOf(term) === -1);
+                });
+            }
+            fieldFilter.addEventListener('input', applyFilter);
+            if (allFields) { allFields.addEventListener('change', applyFilter); }
+
+            // The list moves aside, so all of it stays in view
+            function openPanel() {
+                panel.style.display = 'flex';
+                document.body.style.paddingRight = panel.offsetWidth + 'px';
+            }
+
+            function closePanel() {
+                panel.style.display = 'none';
+                document.body.style.paddingRight = '';
+                if (activeRow) { activeRow.classList.remove('table-active'); }
+                activeRow = null;
+            }
+            document.getElementById('panel_close').addEventListener('click', closePanel);
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') { closePanel(); }
+            });
+
+            function cell(row, text, className) {
+                var td = row.insertCell();
+                td.textContent = text;
+                if (className) { td.className = className; }
+                return td;
+            }
+
+            // Values too common to tell anything when they match
+            // The fields of query and field list, shown without a match
+            var KEY_FIELDS = {{ (key_fields or []) | tojson }};
+            var TRIVIAL = ['true', 'false', 'yes', 'no', 'none', 'null', 'unknown'];
+
+            function normal(value) {
+                return String(value).trim().toLowerCase();
+            }
+
+            // How two values compare: 'same', 'similar' when one holds the
+            // other, else ''
+            function likeness(one, two) {
+                var a = normal(one);
+                var b = normal(two);
+                if (!a || !b) { return ''; }
+                if (a === b) { return 'same'; }
+                if (Math.min(a.length, b.length) >= 3
+                        && (a.indexOf(b) !== -1 || b.indexOf(a) !== -1)) {
+                    return 'similar';
+                }
+                return '';
+            }
+
+            function worthMatching(value) {
+                var text = normal(value);
+                return text.length >= 3 && TRIVIAL.indexOf(text) === -1;
+            }
+
+            function codeCell(row, text) {
+                var td = cell(row, '');
+                var code = document.createElement('code');
+                code.textContent = text;
+                td.appendChild(code);
+                return td;
+            }
+
+            function fieldRow(body, name, value) {
+                var row = body.insertRow();
+                codeCell(row, name).style.width = '35%';
+                cell(row, value);
+                row.dataset.both = '1';
+                row.dataset.search = (name + ' ' + value).toLowerCase();
+            }
+
+            // With the Syncer host: every attribute of the host next to the
+            // ServiceNow fields of the same name or of the same or a
+            // similar value, whatever the field is called. The fields no
+            // attribute matched follow, shown with All fields.
+            function hostRows(body, snowPairs, hostPairs) {
+                var used = {};
+                hostPairs.forEach(function (pair) {
+                    var name = pair[0];
+                    var value = String(pair[1]);
+                    var found = [];
+                    snowPairs.forEach(function (field) {
+                        var how = likeness(value, field[1]);
+                        if (field[0] === name) {
+                            found.push({field: field, how: how || 'differs'});
+                        } else if (how && worthMatching(value) && worthMatching(field[1])) {
+                            found.push({field: field, how: how});
+                        }
+                    });
+                    var rank = {same: 0, similar: 1, differs: 2};
+                    found.sort(function (x, y) { return rank[x.how] - rank[y.how]; });
+                    var row = body.insertRow();
+                    codeCell(row, name);
+                    cell(row, value);
+                    var fields = cell(row, '');
+                    var values = cell(row, '');
+                    var marks = cell(row, '');
+                    found.forEach(function (match, i) {
+                        used[match.field[0]] = true;
+                        var sep = i ? document.createElement('br') : null;
+                        [fields, values, marks].forEach(function (td) {
+                            if (sep) { td.appendChild(sep.cloneNode()); }
+                        });
+                        var code = document.createElement('code');
+                        code.textContent = match.field[0];
+                        fields.appendChild(code);
+                        values.appendChild(document.createTextNode(match.field[1]));
+                        var mark = document.createElement('span');
+                        mark.className = {same: 'badge badge-success',
+                                          similar: 'badge badge-info',
+                                          differs: 'badge badge-warning'}[match.how];
+                        mark.textContent = match.how;
+                        marks.appendChild(mark);
+                    });
+                    row.dataset.both = found.length ? '1' : '';
+                    row.dataset.search = [name, value].concat(found.map(function (match) {
+                        return match.field[0] + ' ' + match.field[1];
+                    })).join(' ').toLowerCase();
+                });
+                // The fields of query and field list first, shown always
+                snowPairs.filter(function (field) { return !used[field[0]]; })
+                    .sort(function (x, y) {
+                        return (KEY_FIELDS.indexOf(x[0]) === -1) - (KEY_FIELDS.indexOf(y[0]) === -1);
+                    })
+                    .forEach(function (field) {
+                        var row = body.insertRow();
+                        cell(row, '');
+                        cell(row, '');
+                        codeCell(row, field[0]);
+                        cell(row, field[1]);
+                        cell(row, '');
+                        row.dataset.both = KEY_FIELDS.indexOf(field[0]) !== -1 ? '1' : '';
+                        row.dataset.search = (field[0] + ' ' + field[1]).toLowerCase();
+                    });
+            }
+
+            function table(record, answer) {
+                var box = document.createElement('div');
+                var head = document.createElement('div');
+                head.className = 'font-weight-bold mt-2 mb-1';
+                head.textContent = record.table + ' ' + record.sys_id;
+                box.appendChild(head);
+                if (answer.error) {
+                    var error = document.createElement('div');
+                    error.className = 'text-danger';
+                    error.style.whiteSpace = 'pre-line';
+                    error.textContent = answer.error;
+                    box.appendChild(error);
+                    return box;
+                }
+                var fields = document.createElement('table');
+                fields.className = 'table table-sm table-striped mb-0';
+                if (answer.host) {
+                    var titles = fields.createTHead().insertRow();
+                    ['Syncer attribute', 'Syncer value', 'ServiceNow field',
+                     'ServiceNow value', ''].forEach(function (title) {
+                        var th = document.createElement('th');
+                        // Sticky at the top of the panel, not below the navbar
+                        th.style.top = '0';
+                        th.textContent = title;
+                        titles.appendChild(th);
+                    });
+                }
+                var body = fields.createTBody();
+                if (answer.host) {
+                    hostRows(body, answer.fields.filter(function (pair) { return pair[1] !== ''; }),
+                             answer.host);
+                } else {
+                    answer.fields.forEach(function (pair) { fieldRow(body, pair[0], pair[1]); });
+                }
+                box.appendChild(fields);
+                return box;
+            }
+
+            // Delegated, a lookup outside the query adds links later
+            document.getElementById('name_table').addEventListener('click', function (event) {
+                var link = event.target.closest('.record-open');
+                if (!link) { return; }
+                event.preventDefault();
+                if (activeRow) { activeRow.classList.remove('table-active'); }
+                activeRow = link.closest('tr');
+                activeRow.classList.add('table-active');
+                document.getElementById('panel_title').textContent = link.textContent;
+                panelBody.textContent = 'Reading from ServiceNow ...';
+                openPanel();
+                var records = JSON.parse(link.dataset.records);
+                Promise.all(records.map(function (record) {
+                    return fetch(recordUrl + '&table=' + encodeURIComponent(record.table)
+                                 + '&sys_id=' + encodeURIComponent(record.sys_id)
+                                 + (link.dataset.host
+                                    ? '&host=' + encodeURIComponent(link.dataset.host) : ''),
+                                 {credentials: 'same-origin'})
+                        .then(function (response) { return response.json(); })
+                        .catch(function () { return {error: 'Request failed'}; })
+                        .then(function (answer) { return table(record, answer); });
+                })).then(function (boxes) {
+                    // A later click may have opened another name meanwhile
+                    if (activeRow !== link.closest('tr')) { return; }
+                    panelBody.textContent = '';
+                    boxes.forEach(function (box) { panelBody.appendChild(box); });
+                    applyFilter();
+                });
+            });
+
+            {% if outside_query %}
+            // The hosts without a note, a chunk per request, one after
+            // the other, so the page shows how far it got
+            var lookup = document.getElementById('outside_query');
+            var progress = document.getElementById('outside_progress');
+            var noteCount = document.getElementById('note_count');
+            var formArgs = {{ form_args | tojson }};
+            lookup.addEventListener('click', function () {
+                var rows = {};
+                document.querySelectorAll('.list-name').forEach(function (row) {
+                    if (!row.querySelector('.note-cell').textContent.trim()) {
+                        rows[row.dataset.name] = row;
+                    }
+                });
+                var names = Object.keys(rows);
+                var done = 0;
+                var found = 0;
+                lookup.disabled = true;
+
+                function show(entry) {
+                    var row = rows[entry.name];
+                    if (!row || !entry.note) { return; }
+                    found += 1;
+                    noteCount.textContent = document.querySelectorAll('.note-cell').length
+                        - names.length + found + ' with a note';
+                    row.querySelector('.note-cell').textContent = entry.note;
+                    row.dataset.search = (entry.name + ' ' + entry.note).toLowerCase();
+                    if (entry.records.length) {
+                        var link = document.createElement('a');
+                        link.href = '#';
+                        link.className = 'record-open';
+                        link.title = 'Show the fields in ServiceNow';
+                        link.dataset.records = JSON.stringify(entry.records);
+                        link.textContent = entry.name;
+                        var cell = row.querySelector('.name-cell');
+                        cell.textContent = '';
+                        cell.appendChild(link);
+                    }
+                }
+
+                function next() {
+                    progress.textContent = done + ' of ' + names.length + ' looked up, '
+                        + found + ' found';
+                    if (done >= names.length) { lookup.disabled = false; return; }
+                    var params = new URLSearchParams();
+                    formArgs.forEach(function (pair) { params.append(pair[0], pair[1]); });
+                    names.slice(done, done + {{ chunk }}).forEach(function (name) {
+                        params.append('name', name);
+                    });
+                    fetch('{{ url_for('.outside_query') }}?' + params.toString(),
+                          {credentials: 'same-origin'})
+                        .then(function (response) { return response.json(); })
+                        .then(function (answer) {
+                            if (answer.error) { throw new Error(answer.error); }
+                            answer.entries.forEach(show);
+                            done = Math.min(done + {{ chunk }}, names.length);
+                            next();
+                        })
+                        .catch(function (error) {
+                            progress.textContent = 'Stopped after ' + done + ': ' + error.message;
+                            lookup.disabled = false;
+                        });
+                }
+                next();
+            });
+            {% endif %}
+        })();
+    </script>
+    {% endif %}
+</div>
+{% endblock %}

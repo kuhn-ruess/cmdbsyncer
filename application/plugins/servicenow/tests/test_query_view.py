@@ -176,3 +176,105 @@ class TestCompareLeavesAccountsOut(unittest.TestCase):
             View._query(form, 25, compare=True)  # pylint: disable=protected-access
         host.get_export_hosts.return_value.filter.assert_called_once_with(
             source_account_name__nin=['csv'])
+
+
+class TestCompareList(unittest.TestCase):
+    """One list of a comparison on a page of its own"""
+
+    def _page(self, args):
+        view = View.__new__(View)
+        view._query = lambda form, _limit, compare=False: {  # pylint: disable=protected-access
+            'missing_in_snow': [{'name': 'srv01', 'note': '', 'records': []}]}
+        view.render = lambda template, **context: context
+        with Flask(__name__).test_request_context('/?' + urlencode(args)):
+            return View.compare_list.__wrapped__(view)
+
+    def test_the_list_is_shown_with_the_account_for_its_records(self):
+        context = self._page({'list': 'missing_in_snow', 'account': 'snow',
+                              'table': 'cmdb_ci', 'sysparm_display_value': 'false',
+                              'sysparm_query': 'monitor=true', 'sysparm_fields': 'name,os'})
+        self.assertEqual(context['key_fields'], ['sys_class_name', 'name', 'monitor', 'os'])
+        self.assertEqual(context['names'][0]['name'], 'srv01')
+        self.assertTrue(context['hosts'])
+        self.assertFalse(context['classes'])
+        self.assertFalse(context['compare_host'])
+        self.assertEqual(context['record_args'],
+                         {'account': 'snow', 'sysparm_display_value': 'false'})
+
+    def test_an_unknown_list_is_refused(self):
+        context = self._page({'list': 'records', 'account': 'snow', 'table': 'cmdb_ci'})
+        self.assertIsNone(context['names'])
+        self.assertIn('Unknown list', context['error'])
+
+
+class TestRecord(unittest.TestCase):
+    """Every field of one record, for the list page"""
+
+    def _record(self, found, url='/?account=snow&table=cmdb_ci&sys_id=a1', host=None):
+        syncer_instance = MagicMock(name='syncer', config={})
+        host_model = MagicMock(name='Host')
+        host_model.objects.return_value.first.return_value = host
+        app = Flask(__name__)
+        with app.test_request_context(url), \
+                patch.object(views, 'SyncServiceNow', return_value=syncer_instance), \
+                patch.object(views, 'Host', host_model), \
+                patch.object(views, 'get_record', return_value=found) as get:
+            response = View.record.__wrapped__(View.__new__(View))
+        return response, get
+
+    def test_the_syncer_host_comes_along_when_asked(self):
+        host = MagicMock(name='host', labels={'os': 'linux', 'fqdn': 'srv01'})
+        response, _ = self._record({'name': 'srv01'}, '/?account=snow&table=cmdb_ci'
+                                   '&sys_id=a1&host=srv01', host)
+        self.assertEqual(response.get_json()['host'], [['fqdn', 'srv01'], ['os', 'linux']])
+        response, _ = self._record({'name': 'srv01'})
+        self.assertNotIn('host', response.get_json())
+
+    def test_the_fields_come_sorted(self):
+        response, get = self._record({'name': 'srv01', 'monitor': 'false'})
+        self.assertEqual(response.get_json(),
+                         {'fields': [['monitor', 'false'], ['name', 'srv01']]})
+        self.assertEqual(get.call_args.args[1:], ('cmdb_ci', 'a1'))
+
+    def test_a_missing_record_is_404(self):
+        (_, status), _ = self._record(None)
+        self.assertEqual(status, 404)
+
+
+class TestAccountSettings(unittest.TestCase):
+    """The settings of an account, read again by the reload button"""
+
+    def test_the_settings_of_the_account(self):
+        account = MagicMock(name='account', address='https://snow.example.com')
+        account.name = 'snow'
+        account.custom_field.side_effect = lambda field, default='': {
+            'tables': 'cmdb_ci', 'compare_exclude_accounts': 'csv,ldap'}.get(field, default)
+        model = MagicMock(name='Account')
+        model.objects.return_value.first.return_value = account
+        with Flask(__name__).test_request_context('/?account=snow'), \
+                patch.object(views, 'Account', model):
+            response = View.account_settings.__wrapped__(View.__new__(View))
+        settings = response.get_json()
+        self.assertEqual(settings['tables'], ['cmdb_ci'])
+        self.assertEqual(settings['exclude_accounts'], ['csv', 'ldap'])
+        self.assertEqual(settings['hostname_field'], 'name')
+
+
+class TestOutsideQuery(unittest.TestCase):
+    """A chunk of Syncer hosts looked up without the query"""
+
+    def test_the_names_are_looked_up_with_the_form(self):
+        syncer_instance = MagicMock(name='syncer', config={})
+
+        def note(_syncer, tables, entries):
+            entries[0]['note'] = f'Outside the query of {tables}'
+        with Flask(__name__).test_request_context(
+                '/?account=snow&table=cmdb_ci&sysparm_query=monitor%3Dtrue'
+                '&name=srv01&name=srv02'), \
+                patch.object(views, 'SyncServiceNow', return_value=syncer_instance), \
+                patch.object(views, 'note_outside_query', side_effect=note):
+            response = View.outside_query.__wrapped__(View.__new__(View))
+        self.assertEqual(syncer_instance.config['sysparm_query'], 'monitor=true')
+        self.assertEqual(response.get_json()['entries'], [
+            {'name': 'srv01', 'note': 'Outside the query of cmdb_ci', 'records': []},
+            {'name': 'srv02', 'note': '', 'records': []}])

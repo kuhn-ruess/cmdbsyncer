@@ -406,9 +406,9 @@ class TestCompareHosts(unittest.TestCase):
         self.assertEqual(self._names(result['missing_in_snow']), ['srv03'])
         self.assertEqual(self._names(result['missing_in_syncer']), ['srv02'])
 
-    def test_only_the_hostname_field_and_the_class_are_read(self):
+    def test_only_the_hostname_field_the_class_and_the_sys_id_are_read(self):
         _, asked = self._compare([], [], hostname_field='fqdn')
-        self.assertEqual(asked, ['fqdn,sys_class_name'])
+        self.assertEqual(asked, ['fqdn,sys_class_name,sys_id'])
 
     def test_a_rewrite_keeps_the_fields_of_the_account(self):
         with patch.object(snow.Host, 'rewrite_hostname', create=True,
@@ -422,10 +422,10 @@ class TestCompareHosts(unittest.TestCase):
         with patch.object(snow.Host, 'rewrite_hostname', create=True, return_value='srv01'):
             _, asked = self._compare([], [], rewrite_hostname='{{ HOSTNAME }}',
                                      sysparm_fields='name, fqdn')
-            self.assertEqual(asked, ['name, fqdn,sys_class_name'])
+            self.assertEqual(asked, ['name, fqdn,sys_class_name,sys_id'])
             _, asked = self._compare([], [], rewrite_hostname='{{ HOSTNAME }}',
-                                     sysparm_fields='name,sys_class_name')
-            self.assertEqual(asked, ['name,sys_class_name'])
+                                     sysparm_fields='name,sys_class_name,sys_id')
+            self.assertEqual(asked, ['name,sys_class_name,sys_id'])
 
     def test_names_carry_their_class(self):
         result, _ = self._compare(
@@ -435,13 +435,14 @@ class TestCompareHosts(unittest.TestCase):
              {'name': 'pc01', 'sys_class_name': 'Computer'},
              {'name': 'x01'}],
             ['srv01', 'srv03'])
-        self.assertEqual(result['matched'], [{'name': 'srv01', 'class': 'Linux Server'}])
-        self.assertEqual(result['missing_in_snow'], [{'name': 'srv03', 'class': ''}])
+        def names(entries):
+            return [(x['name'], x['class']) for x in entries]
+        self.assertEqual(names(result['matched']), [('srv01', 'Linux Server')])
+        self.assertEqual(names(result['missing_in_snow']), [('srv03', '')])
         # Grouped by class, a name of several classes names them all
-        self.assertEqual(result['missing_in_syncer'],
-                         [{'name': 'x01', 'class': ''},
-                          {'name': 'pc01', 'class': 'Computer'},
-                          {'name': 'srv02', 'class': 'Linux Server, Server'}])
+        self.assertEqual(names(result['missing_in_syncer']),
+                         [('x01', ''), ('pc01', 'Computer'),
+                          ('srv02', 'Linux Server, Server')])
 
     def test_classes_count_names_with_and_without_host(self):
         result, _ = self._compare(
@@ -486,7 +487,8 @@ class TestCompareHosts(unittest.TestCase):
         self.assertEqual([(x['class'], x['label'], x['total']) for x in result['by_class']],
                          [('cmdb_ci_linux_server', 'Linux Server', 2),
                           ('cmdb_ci_win_server', 'Windows Server', 1)])
-        self.assertEqual(result['matched'], [{'name': 'srv01', 'class': 'Linux Server'}])
+        self.assertEqual([(x['name'], x['class']) for x in result['matched']],
+                         [('srv01', 'Linux Server')])
 
     def test_raw_values_name_the_host_when_the_account_reads_them(self):
         instance = syncer(sysparm_display_value='false', hostname_field='cmdb_ci')
@@ -494,6 +496,91 @@ class TestCompareHosts(unittest.TestCase):
             {'cmdb_ci': {'value': 'abc123', 'display_value': 'srv01'}}]
         result = instance.compare_hosts('cmdb_ci', [])
         self.assertEqual([x['name'] for x in result['missing_in_syncer']], ['abc123'])
+
+
+    def test_names_keep_table_and_sys_id_of_their_records(self):
+        result, _ = self._compare([{'name': 'srv01', 'sys_id': 'a1'},
+                                   {'name': 'SRV01', 'sys_id': 'a2'}], ['srv01'])
+        self.assertEqual(result['matched'][0]['records'],
+                         [{'table': 'cmdb_ci', 'sys_id': 'a1'},
+                          {'table': 'cmdb_ci', 'sys_id': 'a2'}])
+
+    def test_another_domain_is_noted_on_both_sides(self):
+        result, _ = self._compare([{'name': 'srv01.example.org', 'sys_id': 'a1'}],
+                                  ['srv01.example.com'])
+        missing = result['missing_in_snow'][0]
+        self.assertEqual(missing['note'], 'Other domain in ServiceNow: srv01.example.org')
+        self.assertEqual(missing['records'], [{'table': 'cmdb_ci', 'sys_id': 'a1'}])
+        self.assertEqual(result['missing_in_syncer'][0]['note'],
+                         'Other domain in the Syncer: srv01.example.com')
+
+    def test_the_comparison_reads_nothing_outside_the_query(self):
+        result, asked = self._compare([], ['srv01'], sysparm_query='monitor=true')
+        self.assertEqual(len(asked), 1)
+        self.assertEqual(result['missing_in_snow'][0]['note'], '')
+
+
+class TestNoteOutsideQuery(unittest.TestCase):
+    """Tests for note_outside_query"""
+
+    def test_hosts_outside_the_query_are_noted_with_its_fields(self):
+        instance = syncer(sysparm_query='monitor=true^ORDERBYname')
+        asked = []
+
+        def get_table(_table, query=None, fields=None, display=None):  # pylint: disable=unused-argument
+            asked.append((query, fields))
+            return [{'name': 'srv02', 'monitor': 'false', 'sys_id': 'b2'},
+                    {'name': 'srv03.example.org', 'monitor': '', 'sys_id': 'b3'}]
+        instance.get_table = get_table
+        missing = [{'name': x, 'note': '', 'records': []} for x in ('srv02', 'srv03', 'srv04')]
+        missing.append({'name': 'srv05', 'note': 'Other domain', 'records': []})
+        snow.note_outside_query(instance, 'cmdb_ci', missing)
+        self.assertEqual(asked, [('nameSTARTSWITHsrv02^ORnameSTARTSWITHsrv03'
+                                  '^ORnameSTARTSWITHsrv04',
+                                  'name,sys_class_name,sys_id,monitor')])
+        notes = {x['name']: (x['note'], x['records']) for x in missing}
+        self.assertEqual(notes, {
+            'srv02': ('Outside the query: monitor=false',
+                      [{'table': 'cmdb_ci', 'sys_id': 'b2'}]),
+            'srv03': ('Outside the query as srv03.example.org: monitor=',
+                      [{'table': 'cmdb_ci', 'sys_id': 'b3'}]),
+            'srv04': ('', []),
+            'srv05': ('Other domain', [])})
+
+    def test_without_query_nothing_is_looked_up(self):
+        instance = syncer()
+        instance.get_table = Mock()
+        snow.note_outside_query(instance, 'cmdb_ci', [{'name': 'srv01', 'note': '',
+                                                       'records': []}])
+        instance.get_table.assert_not_called()
+
+
+class TestQueryFields(unittest.TestCase):
+    """Tests for query_fields"""
+
+    def test_the_tested_fields_of_a_query(self):
+        self.assertEqual(snow.query_fields(
+            'monitor=true^ORlocation.name=X^NQoperational_status!=2^monitor=1'
+            '^ORDERBYDESCname'),
+            ['monitor', 'location.name', 'operational_status'])
+        self.assertEqual(snow.query_fields(''), [])
+
+
+class TestGetRecord(unittest.TestCase):
+    """Tests for get_record"""
+
+    def test_every_field_of_one_record(self):
+        instance = syncer()
+        sent = []
+
+        def read_page(table, params):
+            sent.append((table, params))
+            return [{'name': 'srv01', 'monitor': None}]
+        instance.read_page = read_page
+        self.assertEqual(snow.get_record(instance, 'cmdb_ci', 'a1'),
+                         {'name': 'srv01', 'monitor': ''})
+        self.assertEqual(sent[0][1]['sysparm_query'], 'sys_id=a1')
+        self.assertNotIn('sysparm_fields', sent[0][1])
 
 
 class TestInventorizeTables(unittest.TestCase):

@@ -25,15 +25,24 @@
             <div class="form-row">
                 <div class="form-group col-md-3">
                     <label for="account">ServiceNow account</label>
-                    <select class="form-control" id="account" name="account" required>
-                        <option value="">— select account —</option>
-                        {% for account in accounts %}
-                        <option value="{{ account.name }}"
-                                {% if account.name == form.account %}selected{% endif %}>
-                            {{ account.name }} — {{ account.address }}
-                        </option>
-                        {% endfor %}
-                    </select>
+                    <div class="input-group">
+                        <select class="form-control" id="account" name="account" required>
+                            <option value="">— select account —</option>
+                            {% for account in accounts %}
+                            <option value="{{ account.name }}"
+                                    {% if account.name == form.account %}selected{% endif %}>
+                                {{ account.name }} — {{ account.address }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="input-group-append">
+                            <button type="button" class="btn btn-outline-secondary"
+                                    id="account_reload"
+                                    title="Read the settings of the account again">
+                                <i class="fa fa-refresh"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 <div class="form-group col-md-3">
                     <label for="table">Table</label>
@@ -126,34 +135,45 @@
                 </div>
             </div>
 
-            <div class="form-row">
-                <div class="form-group col-md-5">
-                    <label for="exclude_accounts">Exclude accounts from the comparison</label>
-                    <select class="form-control" id="exclude_accounts" name="exclude_accounts"
-                            multiple size="{{ [[host_accounts | length, 2] | max, 5] | min }}">
-                        {% for name in host_accounts %}
-                        <option value="{{ name }}"
-                                {% if name in form.exclude_accounts %}selected{% endif %}>
-                            {{ name }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                    <small class="form-text text-muted">
-                        Hosts imported by these accounts do not count as
-                        Syncer hosts in <em>Compare with Syncer</em>.
-                        Ctrl or Cmd click selects several.
-                    </small>
-                </div>
-            </div>
-
             <button type="submit" name="action" value="query" class="btn btn-primary"
                     {% if not accounts %}disabled{% endif %}>
                 <i class="fa fa-search"></i> Query
             </button>
-            <button type="submit" name="action" value="compare" class="btn btn-secondary ml-2"
-                    {% if not accounts %}disabled{% endif %}>
-                <i class="fa fa-balance-scale"></i> Compare with Syncer
-            </button>
+            <div class="btn-group ml-2" id="compare_group">
+                <button type="submit" name="action" value="compare" class="btn btn-secondary"
+                        {% if not accounts %}disabled{% endif %}>
+                    <i class="fa fa-balance-scale"></i> Compare with Syncer
+                </button>
+                <button type="button" class="btn btn-secondary dropdown-toggle dropdown-toggle-split"
+                        id="exclude_toggle" aria-haspopup="true" aria-expanded="false"
+                        title="Accounts whose hosts the comparison leaves out"
+                        {% if not accounts %}disabled{% endif %}>
+                    <span class="badge badge-light" id="exclude_count"
+                          {% if not form.exclude_accounts %}style="display: none;"{% endif %}>
+                        {{ form.exclude_accounts | length }}
+                    </span>
+                </button>
+                <div class="dropdown-menu p-2" style="min-width: 16rem; max-height: 20rem; overflow-y: auto;">
+                    <div class="font-weight-bold mb-1">Leave out the hosts of</div>
+                    {% for name in host_accounts %}
+                    <div class="form-check">
+                        <input class="form-check-input exclude-account" type="checkbox"
+                               id="exclude_{{ loop.index }}" name="exclude_accounts"
+                               value="{{ name }}"
+                               {% if name in form.exclude_accounts %}checked{% endif %}/>
+                        <label class="form-check-label" for="exclude_{{ loop.index }}">
+                            {{ name }}
+                        </label>
+                    </div>
+                    {% else %}
+                    <div class="text-muted">No host comes from an account.</div>
+                    {% endfor %}
+                    <small class="text-muted d-block mt-1">
+                        Hosts imported by these accounts do not count as
+                        Syncer hosts.
+                    </small>
+                </div>
+            </div>
             {% if may_save %}
             <button type="button" class="btn btn-outline-primary ml-2" id="account_save"
                     {% if not accounts %}disabled{% endif %}>
@@ -188,16 +208,14 @@
     {% endif %}
 
     {% if comparison %}
-    {# Syncer names link to their host, ServiceNow-only names have none #}
+    {# Each list opens on a page of its own #}
     {% set compare_lists = [
-        {'id': 'compare-matched', 'title': 'Found in both', 'badge': 'success',
-         'names': comparison.matched, 'hosts': True, 'classes': True},
-        {'id': 'compare-missing-in-snow', 'title': 'Syncer hosts missing in ServiceNow',
-         'badge': 'warning', 'names': comparison.missing_in_snow, 'hosts': True,
-         'classes': False},
-        {'id': 'compare-missing-in-syncer', 'title': 'ServiceNow names without Syncer host',
-         'badge': 'secondary', 'names': comparison.missing_in_syncer, 'hosts': False,
-         'classes': True},
+        {'key': 'matched', 'title': 'Found in both', 'badge': 'success',
+         'names': comparison.matched},
+        {'key': 'missing_in_snow', 'title': 'Syncer hosts missing in ServiceNow',
+         'badge': 'warning', 'names': comparison.missing_in_snow},
+        {'key': 'missing_in_syncer', 'title': 'ServiceNow names without Syncer host',
+         'badge': 'secondary', 'names': comparison.missing_in_syncer},
     ] %}
     <p>
         Used request{% if comparison.urls | length > 1 %}s{% endif %}:
@@ -221,11 +239,17 @@
                     <tr><th>Hosts in the Syncer</th>
                         <td>{{ comparison.syncer_hosts }}</td></tr>
                     {% for list in compare_lists %}
-                    <tr><th>{{ list.title }}</th>
+                    <tr><th>
+                        <a href="{{ url_for('.compare_list', list=list.key, **class_args) }}"
+                           target="_blank"
+                           title="Open the list in a new window, with the fields of every record">
+                            {{- list.title }} <i class="fa fa-external-link"></i></a>
+                        </th>
                         <td>
                             {%- if list.names -%}
-                            <a href="#{{ list.id }}" class="badge badge-{{ list.badge }} compare-open"
-                               title="Show the names">{{ list.names | length }}</a>
+                            <a href="{{ url_for('.compare_list', list=list.key, **class_args) }}"
+                               target="_blank" class="badge badge-{{ list.badge }}"
+                               title="Open the list in a new window">{{ list.names | length }}</a>
                             {%- else -%}
                             <span class="badge badge-{{ list.badge }}">0</span>
                             {%- endif -%}
@@ -237,14 +261,14 @@
     </div>
 
     {% if comparison.by_class %}
-    <details class="mb-3" id="compare-by-class">
+    <details class="mb-3" id="compare-by-class" open>
         <summary>ServiceNow names by class ({{ comparison.by_class | length }})</summary>
         <p class="text-muted small mb-1 mt-2">
             Most names first. A click on a class opens its names in a new
             window. <em>partly in the Syncer</em>: the class
             has names with and without Syncer host.
         </p>
-        <div class="card app-card"><div class="table-scroll" style="max-height: 25rem; overflow-y: auto;">
+        <div class="card app-card"><div class="table-scroll" style="max-height: 70vh; overflow-y: auto;">
             <table class="table table-sm table-striped mb-0">
                 <thead>
                     <tr><th>Class</th><th>Class id</th><th>Names</th>
@@ -275,31 +299,6 @@
     </details>
     {% endif %}
 
-    {% for list in compare_lists if list.names %}
-    <details class="mb-3" id="{{ list.id }}">
-        <summary>{{ list.title }} ({{ list.names | length }})</summary>
-        <div class="card app-card mt-2"><div class="table-scroll" style="max-height: 25rem; overflow-y: auto;">
-            <table class="table table-sm mb-0">
-                <thead>
-                    <tr><th>Name</th>
-                        {% if list.classes %}<th>Class in ServiceNow</th>{% endif %}</tr>
-                </thead>
-                <tbody>
-                    {% for entry in list.names %}
-                    <tr>
-                        <td>
-                            {%- if list.hosts -%}
-                            <a href="{{ url_for('host.debug', hostname=entry.name) }}">{{ entry.name }}</a>
-                            {%- else -%}{{ entry.name }}{%- endif -%}
-                        </td>
-                        {% if list.classes %}<td>{{ entry['class'] }}</td>{% endif %}
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div></div>
-    </details>
-    {% endfor %}
     {% endif %}
 
     {% if result %}
@@ -383,7 +382,8 @@
         (function () {
             var accounts = {{ accounts | tojson }};
             var account = document.getElementById('account');
-            var excluded = document.getElementById('exclude_accounts');
+            var excluded = document.querySelectorAll('.exclude-account');
+            var excludeCount = document.getElementById('exclude_count');
             var fields = {
                 table: document.getElementById('table'),
                 api_path: document.getElementById('api_path'),
@@ -400,21 +400,81 @@
                 return null;
             }
 
+            function chosenExcluded() {
+                return Array.prototype.filter.call(excluded, function (box) {
+                    return box.checked;
+                }).map(function (box) { return box.value; });
+            }
+
+            function showExcludeCount() {
+                var count = chosenExcluded().length;
+                excludeCount.textContent = count;
+                excludeCount.style.display = count ? '' : 'none';
+            }
+
             // Picking an account fills the form with its settings, so a
             // query starts from what the import would do and every field
             // can be changed for the try without touching the account.
-            account.addEventListener('change', function () {
-                var selected = current();
-                if (!selected) { return; }
+            function fill(selected) {
                 fields.table.value = selected.tables.join(', ');
                 fields.api_path.value = selected.api_path;
                 fields.hostname_field.value = selected.hostname_field;
                 fields.sysparm_query.value = selected.sysparm_query;
                 fields.sysparm_fields.value = selected.sysparm_fields;
                 fields.sysparm_display_value.value = selected.sysparm_display_value;
-                Array.prototype.forEach.call(excluded.options, function (option) {
-                    option.selected = selected.exclude_accounts.indexOf(option.value) !== -1;
+                Array.prototype.forEach.call(excluded, function (box) {
+                    box.checked = selected.exclude_accounts.indexOf(box.value) !== -1;
                 });
+                showExcludeCount();
+                account.dispatchEvent(new Event('settings'));
+            }
+
+            account.addEventListener('change', function () {
+                var selected = current();
+                if (selected) { fill(selected); }
+            });
+
+            // Read the account again, e.g. after it was changed in
+            // another tab, without losing the result on the page
+            document.getElementById('account_reload').addEventListener('click', function () {
+                if (!account.value) { return; }
+                fetch('{{ url_for('.account_settings') }}?account='
+                      + encodeURIComponent(account.value), {credentials: 'same-origin'})
+                    .then(function (response) {
+                        if (!response.ok) { throw new Error(response.status); }
+                        return response.json();
+                    })
+                    .then(function (settings) {
+                        for (var i = 0; i < accounts.length; i++) {
+                            if (accounts[i].name === settings.name) { accounts[i] = settings; }
+                        }
+                        fill(settings);
+                    })
+                    .catch(function () {
+                        alert('Reading the account "' + account.value + '" failed.');
+                    });
+            });
+
+            // The menu of the excluded accounts opens on its toggle and
+            // stays open while boxes are ticked, a click elsewhere closes
+            // it. Bootstrap's own dropdown is not used: the page loads it
+            // twice, so one click opens and closes it again.
+            var excludeToggle = document.getElementById('exclude_toggle');
+            var excludeMenu = document.querySelector('#compare_group .dropdown-menu');
+            function showExcludeMenu(open) {
+                excludeMenu.classList.toggle('show', open);
+                excludeToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            }
+            excludeToggle.addEventListener('click', function (event) {
+                event.stopPropagation();
+                showExcludeMenu(!excludeMenu.classList.contains('show'));
+            });
+            excludeMenu.addEventListener('click', function (event) {
+                event.stopPropagation();
+            });
+            document.addEventListener('click', function () { showExcludeMenu(false); });
+            Array.prototype.forEach.call(excluded, function (box) {
+                box.addEventListener('change', showExcludeCount);
             });
 
             // The query as one condition per line and one list value per
@@ -481,7 +541,7 @@
                     input.value = fromList(area.value);
                     fit();
                 });
-                account.addEventListener('change', function () {
+                account.addEventListener('settings', function () {
                     area.value = toList(input.value);
                     fit();
                 });
@@ -504,9 +564,7 @@
                         account: account.value,
                         limit: document.getElementById('limit').value,
                         all_fields: allFields.checked ? '1' : '',
-                        exclude_accounts: Array.prototype.filter.call(excluded.options, function (option) {
-                            return option.selected;
-                        }).map(function (option) { return option.value; }).join(',')
+                        exclude_accounts: chosenExcluded().join(',')
                     };
                     Object.keys(fields).forEach(function (key) { values[key] = fields[key].value; });
                     Object.keys(values).forEach(function (key) {
@@ -525,14 +583,6 @@
             allFields.addEventListener('change', function () {
                 fields.sysparm_fields.readOnly = allFields.checked;
                 document.getElementById('fields_editor').readOnly = allFields.checked;
-            });
-
-            // A count of the comparison opens the list of its names
-            document.querySelectorAll('.compare-open').forEach(function (link) {
-                link.addEventListener('click', function () {
-                    var list = document.getElementById(link.getAttribute('href').slice(1));
-                    if (list) { list.open = true; }
-                });
             });
         })();
     </script>

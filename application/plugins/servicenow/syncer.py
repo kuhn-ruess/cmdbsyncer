@@ -1,6 +1,8 @@
 """
 Import objects from ServiceNow
 """
+import re
+
 from requests.exceptions import RequestException
 from requests.auth import HTTPBasicAuth
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn
@@ -90,16 +92,51 @@ RELATION_MATCH = 'rel'
 CLASS_FIELD = 'sys_class_name'
 
 
-def compare_names(in_snow, classes, hostnames, class_labels=None):
+# Records of one name a comparison keeps, to show their fields
+RECORDS_PER_NAME = 5
+# Syncer hosts looked up outside the query per request
+OUTSIDE_QUERY_CHUNK = 40
+
+
+def short_name(name):
+    """ A hostname without its domain, lower case """
+    return name.split('.', 1)[0].lower()
+
+
+def query_fields(query):
+    """
+    The fields the conditions of an encoded query test, e.g.
+    ['monitor', 'location.name'] for monitor=true^ORlocation.name=X
+    """
+    fields = []
+    for part in re.split(r'\^(?:OR(?!DERBY)|NQ)?', query or ''):
+        if part.startswith('ORDERBY') or part in ('EQ', ''):
+            continue
+        if (found := re.match(r'[A-Za-z0-9_.]+', part)) and found[0] not in fields:
+            fields.append(found[0])
+    return fields
+
+
+def compare_names(in_snow, classes, hostnames, class_labels=None, records=None):  # pylint: disable=too-many-locals
     """
     The number of Syncer hosts, the names found on both sides and on
     one side only, each with the classes of its ServiceNow records, and
     per class its names and how many of them have a Syncer host.
     `in_snow` and `classes` are keyed by the lower case name, `classes`
-    holds the class ids, `class_labels` their display names.
+    holds the class ids, `class_labels` their display names, `records`
+    the table and sys_id of the records of a name.
+    A name of one side only gets a note when the other side has it under
+    another domain.
     """
     class_labels = class_labels or {}
+    records = records or {}
     in_syncer = {name.lower(): name for name in hostnames}
+    short_snow = {}
+    for key, name in in_snow.items():
+        short_snow.setdefault(short_name(key), []).append(key)
+    short_syncer = {}
+    for key, name in in_syncer.items():
+        short_syncer.setdefault(short_name(key), []).append(name)
     per_class = {}
     for key, found in classes.items():
         status = 'matched' if key in in_syncer else 'extra'
@@ -114,17 +151,35 @@ def compare_names(in_snow, classes, hostnames, class_labels=None):
         entry['total'] = entry['matched'] + entry['extra']
         entry['names'].sort(key=lambda x: (not x['host'], x['name'].lower()))
 
-    def entries(keys, names):
-        """ Names with their classes, grouped by class """
-        return sorted(({'name': names[x],
-                        'class': ', '.join(sorted(class_labels.get(c) or c
-                                                  for c in classes.get(x, set()) - {''}))}
-                       for x in keys), key=lambda x: (x['class'], x['name']))
+    def listed(key, name, snow_key=None, note=''):
+        """ One name with the classes and records of its ServiceNow name """
+        snow_key = key if snow_key is None else snow_key
+        return {'name': name, 'note': note, 'records': records.get(snow_key, []),
+                'class': ', '.join(sorted(class_labels.get(c) or c
+                                          for c in classes.get(snow_key, set()) - {''}))}
+
+    def by_class(found):
+        return sorted(found, key=lambda x: (x['class'], x['name']))
+
+    missing_in_snow = []
+    for key in in_syncer.keys() - in_snow.keys():
+        # The same host in ServiceNow under another domain
+        others = short_snow.get(short_name(key), [])
+        missing_in_snow.append(listed(
+            key, in_syncer[key], others[0] if others else '',
+            f"Other domain in ServiceNow: {', '.join(in_snow[x] for x in others)}"
+            if others else ''))
+    missing_in_syncer = []
+    for key in in_snow.keys() - in_syncer.keys():
+        others = short_syncer.get(short_name(key), [])
+        missing_in_syncer.append(listed(
+            key, in_snow[key],
+            note=f"Other domain in the Syncer: {', '.join(others)}" if others else ''))
     return {
         'syncer_hosts': len(in_syncer),
-        'matched': entries(in_snow.keys() & in_syncer.keys(), in_syncer),
-        'missing_in_snow': entries(in_syncer.keys() - in_snow.keys(), in_syncer),
-        'missing_in_syncer': entries(in_snow.keys() - in_syncer.keys(), in_snow),
+        'matched': by_class(listed(x, in_syncer[x]) for x in in_snow.keys() & in_syncer.keys()),
+        'missing_in_snow': by_class(missing_in_snow),
+        'missing_in_syncer': by_class(missing_in_syncer),
         # The classes with the most names first
         'by_class': sorted(per_class.values(), key=lambda x: (-x['total'], x['class'])),
     }
@@ -149,6 +204,69 @@ def class_of(record):
     if isinstance(value, dict):
         return value.get('value') or '', value.get('display_value') or ''
     return value or '', value or ''
+
+
+def compared_names(syncer, record):
+    """ The names of a record read with sysparm_display_value=all """
+    raw = syncer.config.get('sysparm_display_value', 'true') == 'false'
+    return syncer.record_hostnames(syncer.flatten_record(pick_values(record, raw)))
+
+
+def keep_record(kept, table, record):
+    """ Remember table and sys_id of a record in the list `kept` """
+    sys_id = pick_values(record, True).get('sys_id')
+    if sys_id and len(kept) < RECORDS_PER_NAME:
+        kept.append({'table': table, 'sys_id': sys_id})
+
+
+def note_outside_query(syncer, tables, missing):
+    """
+    Look up the Syncer hosts ServiceNow did not deliver without the
+    query of the account: a record of the same short name that the
+    query leaves out gets noted with the values of the fields the query
+    tests, e.g. monitor=false. `missing` are entries of the comparison,
+    those with a note already are not looked up. One request per
+    OUTSIDE_QUERY_CHUNK hosts and table, so the list page asks for a
+    chunk at a time.
+    """
+    query = syncer.config.get('sysparm_query')
+    todo = {short_name(x['name']): x for x in missing if not x['note']}
+    if not query or not todo:
+        return
+    field = syncer.config.get('hostname_field') or 'name'
+    tested = query_fields(query)
+    fields = ','.join(dict.fromkeys(
+        [field, CLASS_FIELD, 'sys_id'] + tested
+        + split_tables(syncer.config.get('sysparm_fields') if syncer.config.get(
+            'rewrite_hostname') else '')))
+    shorts = sorted(todo)
+    for start in range(0, len(shorts), OUTSIDE_QUERY_CHUNK):
+        lookup = '^OR'.join(f"{field}STARTSWITH{x}"
+                            for x in shorts[start:start + OUTSIDE_QUERY_CHUNK])
+        for table in split_tables(tables):
+            for record in syncer.get_table(table, query=lookup, fields=fields, display='all'):
+                note_record(syncer, todo, table, record, tested)
+
+
+def note_record(syncer, todo, table, record, tested):  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    """ Note a record found outside the query at its Syncer host in `todo` """
+    values = pick_values(record, False)
+    for name in compared_names(syncer, record):
+        entry = todo.get(short_name(name))
+        if entry is None:
+            continue
+        if not entry['note']:
+            where = '' if name.lower() == entry['name'].lower() else f" as {name}"
+            shown = ', '.join(f"{x}={values.get(x) or ''}" for x in tested)
+            entry['note'] = f"Outside the query{where}: {shown}"
+        keep_record(entry['records'], table, record)
+
+
+def get_record(syncer, table, sys_id):
+    """ Every field of one record of `table`, empty ones included """
+    found = syncer.read_page(table, syncer.table_params(1, query=f"sys_id={sys_id}",
+                                                        fields=''))
+    return syncer.flatten_record(found[0], keep_empty=True) if found else None
 
 
 def split_tables(value):
@@ -798,36 +916,46 @@ class SyncServiceNow(Plugin):
         both its name and its id, and the hostname is taken the way the
         account's sysparm_display_value takes it.
         """
-        raw = self.config.get('sysparm_display_value', 'true') == 'false'
-        fields = self.config.get('sysparm_fields')
-        if not self.config.get('rewrite_hostname'):
-            fields = f"{self.config.get('hostname_field') or 'name'},{CLASS_FIELD}"
-        elif fields and CLASS_FIELD not in [x.strip() for x in fields.split(',')]:
-            fields = f"{fields},{CLASS_FIELD}"
+        fields = self._compare_fields()
         in_snow = {}
         classes = {}
         class_labels = {}
-        records = unnamed = 0
-        for record in (x for table in split_tables(tables)
-                       for x in self.get_table(table, fields=fields or None, display='all')):
-            records += 1
-            labels = self.flatten_record(pick_values(record, raw))
-            class_id, class_labels[class_id] = class_of(record)
-            names = self.record_hostnames(labels)
-            if not names:
-                unnamed += 1
-            for name in names:
-                in_snow.setdefault(name.lower(), name)
-                classes.setdefault(name.lower(), set()).add(class_id)
+        found = {}
+        counts = {'records': 0, 'unnamed': 0}
+        for table in split_tables(tables):
+            for record in self.get_table(table, fields=fields or None, display='all'):
+                counts['records'] += 1
+                class_id, class_labels[class_id] = class_of(record)
+                names = compared_names(self, record)
+                if not names:
+                    counts['unnamed'] += 1
+                for name in names:
+                    in_snow.setdefault(name.lower(), name)
+                    classes.setdefault(name.lower(), set()).add(class_id)
+                    keep_record(found.setdefault(name.lower(), []), table, record)
+        result = compare_names(in_snow, classes, hostnames, class_labels, found)
         return {
             'urls': [self.table_url(x) for x in split_tables(tables)],
             'params': self.table_params(self.page_size(), fields=fields or None,
                                         display='all'),
             'limits': self.last_rate_limit or {},
-            'records': records,
-            'unnamed': unnamed,
             'snow_names': len(in_snow),
-        } | compare_names(in_snow, classes, hostnames, class_labels)
+            **counts,
+        } | result
+
+    def _compare_fields(self):
+        """
+        The fields a comparison reads. Without a hostname rewrite only the
+        hostname field, the class and the sys_id, a rewrite may use any
+        field, so then the field list of the account with both added.
+        """
+        fields = self.config.get('sysparm_fields')
+        if not self.config.get('rewrite_hostname'):
+            return f"{self.config.get('hostname_field') or 'name'},{CLASS_FIELD},sys_id"
+        if fields:
+            have = [x.strip() for x in fields.split(',')]
+            fields = ','.join([fields] + [x for x in (CLASS_FIELD, 'sys_id') if x not in have])
+        return fields
 
 #.
 #   .-- Import hosts

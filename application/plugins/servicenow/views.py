@@ -1,16 +1,26 @@
 """
 Query a ServiceNow table from the web interface
 """
-from flask import flash, redirect, request, url_for
+from contextlib import contextmanager
+
+from flask import flash, jsonify, redirect, request, url_for
 from flask_admin import BaseView, expose
 from flask_login import current_user
 
 from application.models.account import Account, CustomEntry
 from application.models.host import Host
 
-from .syncer import CLASS_FIELD, ServiceNowError, SyncServiceNow, split_tables
+from .syncer import (CLASS_FIELD, OUTSIDE_QUERY_CHUNK, ServiceNowError, SyncServiceNow,
+                     get_record, note_outside_query, query_fields, split_tables)
 
 DEFAULT_LIMIT = 25
+
+# The lists of a comparison that open on a page of their own
+COMPARE_LISTS = {
+    'matched': 'Found in both',
+    'missing_in_snow': 'Syncer hosts missing in ServiceNow',
+    'missing_in_syncer': 'ServiceNow names without Syncer host',
+}
 MAX_LIMIT = 500
 
 
@@ -53,12 +63,9 @@ class ServiceNowQueryView(BaseView):
         return current_user.is_authenticated and current_user.has_right('servicenow')
 
     @staticmethod
-    def _accounts():
-        """
-        The ServiceNow accounts a query can run against, together with the
-        settings the form offers as the defaults of the account
-        """
-        return [{
+    def _settings(account):
+        """ The settings of an account the form offers as its defaults """
+        return {
             'name': account.name,
             'address': account.address,
             'api_path': account.custom_field('api_path', '/api/now'),
@@ -68,7 +75,12 @@ class ServiceNowQueryView(BaseView):
             'sysparm_fields': account.custom_field('sysparm_fields'),
             'sysparm_display_value': account.custom_field('sysparm_display_value', 'true'),
             'exclude_accounts': split_tables(account.custom_field('compare_exclude_accounts')),
-        } for account in Account.objects(enabled=True, type='servicenow').order_by('name')]
+        }
+
+    def _accounts(self):
+        """ The ServiceNow accounts a query can run against, with their settings """
+        return [self._settings(account) for account in
+                Account.objects(enabled=True, type='servicenow').order_by('name')]
 
     @staticmethod
     def _limit(value):
@@ -81,14 +93,12 @@ class ServiceNowQueryView(BaseView):
             return DEFAULT_LIMIT
 
     @staticmethod
-    def _query(form, limit, compare=False):
+    @contextmanager
+    def _syncer(form):
         """
-        Run one query with the settings of the form. Raises ServiceNowError
-        if it could not be done. With `compare` the whole table is read
-        and held against the hosts an export would send.
+        The syncer of the form's account with the settings of the form.
+        Raises ServiceNowError if the account is not there.
         """
-        if not form['table']:
-            raise ServiceNowError("No table given")
         try:
             syncer = SyncServiceNow(form['account'])
         except ValueError as error:
@@ -108,14 +118,26 @@ class ServiceNowQueryView(BaseView):
             syncer.config['sysparm_display_value'] = form['sysparm_display_value']
             if form['hostname_field']:
                 syncer.config['hostname_field'] = form['hostname_field']
+            yield syncer
+        finally:
+            # A query is no sync run, it leaves no log entry behind
+            syncer.close()
+
+    @classmethod
+    def _query(cls, form, limit, compare=False):
+        """
+        Run one query with the settings of the form. Raises ServiceNowError
+        if it could not be done. With `compare` the whole table is read
+        and held against the hosts an export would send.
+        """
+        if not form['table']:
+            raise ServiceNowError("No table given")
+        with cls._syncer(form) as syncer:
             if compare:
                 hostnames = Host.get_export_hosts().filter(
                     source_account_name__nin=form['exclude_accounts']).scalar('hostname')
                 return syncer.compare_hosts(form['table'], hostnames)
             return syncer.query_table(form['table'], limit=limit)
-        finally:
-            # A query is no sync run, it leaves no log entry behind
-            syncer.close()
 
     @staticmethod
     def _form(args):
@@ -171,6 +193,18 @@ class ServiceNowQueryView(BaseView):
             may_save=current_user.has_right('account'),
         )
 
+    @expose('/account-settings')
+    def account_settings(self):
+        """
+        The current settings of one account, so the form can read them
+        again without reloading the page
+        """
+        account = Account.objects(name=request.args.get('account', ''),
+                                  type='servicenow').first()
+        if not account:
+            return jsonify({'error': 'Account not found'}), 404
+        return jsonify(self._settings(account))
+
     @expose('/class')
     def class_names(self):
         """
@@ -194,6 +228,79 @@ class ServiceNowQueryView(BaseView):
             error = str(query_error)
         return self.render('admin/servicenow_class_names.html', form=form,
                            class_id=class_id, entry=entry, error=error)
+
+    @expose('/list')
+    def compare_list(self):
+        """
+        One list of a comparison on a page of its own, each name with the
+        ServiceNow records it can show the fields of
+        """
+        form = self._form(request.args)
+        key = request.args.get('list', '')
+        error = None
+        names = None
+        if key in COMPARE_LISTS:
+            try:
+                names = self._query(form, 0, compare=True)[key]
+            except ServiceNowError as query_error:
+                error = str(query_error)
+        else:
+            error = f"Unknown list '{key}'"
+        return self.render('admin/servicenow_compare_list.html', form=form,
+                           title=COMPARE_LISTS.get(key, key), hosts=key != 'missing_in_syncer',
+                           # Hosts ServiceNow does not have come with no class
+                           classes=key != 'missing_in_snow',
+                           compare_host=key == 'matched',
+                           # Shown in the panel even when no attribute matches
+                           key_fields=list(dict.fromkeys(
+                               [CLASS_FIELD, form['hostname_field'] or 'name']
+                               + query_fields(form['sysparm_query'])
+                               + split_tables(form['sysparm_fields']))),
+                           names=names, error=error,
+                           record_args={k: v for k, v in request.args.items()
+                                        if k in ('account', 'api_path', 'sysparm_display_value')},
+                           # Syncer hosts missing in ServiceNow can be looked
+                           # up without the query
+                           outside_query=key == 'missing_in_snow' and form['sysparm_query'],
+                           chunk=OUTSIDE_QUERY_CHUNK,
+                           form_args=[(k, v) for k, v in request.args.items(multi=True)
+                                      if k != 'list'])
+
+    @expose('/outside-query')
+    def outside_query(self):
+        """
+        Look up a few Syncer hosts missing in ServiceNow without the query
+        of the form, for the list page. Asked one chunk at a time, so a
+        long list neither blocks the comparison nor one request.
+        """
+        form = self._form(request.args)
+        names = request.args.getlist('name')[:OUTSIDE_QUERY_CHUNK]
+        entries = [{'name': x, 'note': '', 'records': []} for x in names]
+        try:
+            with self._syncer(form) as syncer:
+                note_outside_query(syncer, form['table'], entries)
+        except ServiceNowError as error:
+            return jsonify({'error': str(error)}), 502
+        return jsonify({'entries': entries})
+
+    @expose('/record')
+    def record(self):
+        """ Every field of one ServiceNow record, for the list page """
+        form = self._form(request.args)
+        try:
+            with self._syncer(form) as syncer:
+                found = get_record(syncer, request.args.get('table', ''),
+                                   request.args.get('sys_id', ''))
+        except ServiceNowError as error:
+            return jsonify({'error': str(error)}), 502
+        if found is None:
+            return jsonify({'error': 'Record not found'}), 404
+        answer = {'fields': sorted(found.items())}
+        # Found in both: the attributes of the Syncer host next to them
+        if hostname := request.args.get('host'):
+            host = Host.objects(hostname=hostname).first()
+            answer['host'] = sorted((host.labels or {}).items()) if host else []
+        return jsonify(answer)
 
     @expose('/save-account', methods=('POST',))
     def save_account(self):
