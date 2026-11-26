@@ -202,6 +202,26 @@ class TestCheckmkTagSync(TagSyncTestCase):
         self.assertEqual(result['grp1'], ('pre_id', 'Pre Title'))
 
 
+class TestIgnoredHost(TagSyncTestCase):
+    """A host a filter rule ignores has no attributes"""
+
+    def _build_caches(self, multiply_expressions):
+        db_host = Mock(hostname='srv01', cache={})
+        groups = {'grp1': {'rw_id': '{{ HOSTNAME }}', 'rw_title': '{{ HOSTNAME }}'}}
+        with patch.object(self.sync, 'get_attributes', return_value=False):
+            self.sync.build_caches(db_host, groups, multiply_expressions)
+        return db_host
+
+    def test_with_multiply_rule_does_not_crash(self):
+        db_host = self._build_caches([('grp_{{ name }}', 'envs')])
+        self.assertEqual(db_host.cache, {})
+        db_host.save.assert_not_called()
+
+    def test_without_multiply_rule_provides_no_tags(self):
+        db_host = self._build_caches([])
+        self.assertEqual(db_host.cache, {})
+
+
 class TestPrepareTags(TagSyncTestCase):
     """The tag payload sent to Checkmk"""
 
