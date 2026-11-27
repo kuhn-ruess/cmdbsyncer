@@ -438,23 +438,10 @@
                       placeholder="One hostname per line, e.g.&#10;web01.example.com&#10;web02.example.com&#10;&#10;or paste CSV with a header row:&#10;hostname,label_env,inventory_os&#10;db01,production,linux&#10;&#10;or YAML, hosts separated by ---:&#10;cluster: ocp-prd.example.com&#10;api: https://api.example.com:6443"></textarea>
             <small class="form-text text-muted">
               Everything opens in a preview first: pick the hostname column, the
-              columns for the Secret Store, the account and the template, and
+              columns for the Secret Store, the account and the templates, and
               edit the values of every host before they are created. Every extra
               column becomes a host label; <code>inventory_&lt;name&gt;</code>
               columns go to the inventory.
-            </small>
-          </div>
-
-          <div class="form-group">
-            <label for="bulkAddTemplateId">Assign template (optional)</label>
-            <select class="form-control" id="bulkAddTemplateId" name="template_id">
-              <option value="">No template</option>
-              {% for template in import_template_choices or [] %}
-                <option value="{{ template.id }}">{{ template.hostname }}</option>
-              {% endfor %}
-            </select>
-            <small class="form-text text-muted">
-              Applies to every host; the preview can still give single hosts another one.
             </small>
           </div>
 
@@ -715,8 +702,12 @@
   // CSV import preview: keep everything in a modal instead of navigating
   // to a full page. The upload/paste is POSTed via AJAX; the server
   // returns the preview fragment which we drop into the preview modal.
+  // The dialog the preview came from: "Back" opens it again.
+  var previewOrigin = null;
+  var previewBack = false;
   function loadCsvPreview(form, title) {
     var fd = new FormData(form);
+    previewOrigin = $(form).closest('.modal');
     fetch(form.getAttribute('action'), {
       method: 'POST',
       body: fd,
@@ -740,6 +731,12 @@
     });
   }
 
+  $(document).on('click', '#importBack', function() { previewBack = true; });
+  $('#csvPreviewModal').on('hidden.bs.modal', function() {
+    if (previewBack && previewOrigin) { previewOrigin.modal('show'); }
+    previewBack = false;
+  });
+
   // Uploads and Manual add both go through the preview modal.
   $(document).on('submit', '#csvImportForm', function(ev) {
     ev.preventDefault();
@@ -748,6 +745,19 @@
   $(document).on('submit', '#bulkAddForm', function(ev) {
     ev.preventDefault();
     loadCsvPreview(this, 'Manual add: preview');
+  });
+
+  // Editable preview: "Templates per host" shows the template column.
+  // Hiding it again drops the choices, so nothing hidden is imported.
+  $(document).on('click', '#importRowTemplates', function() {
+    var cols = document.querySelectorAll('#importTable .import-template-col');
+    var show = cols.length && cols[0].classList.contains('d-none');
+    cols.forEach(function(col) { col.classList.toggle('d-none', !show); });
+    if (!show) {
+      document.querySelectorAll('#importTable .import-row-template option')
+        .forEach(function(opt) { opt.selected = false; });
+    }
+    this.classList.toggle('active', show);
   });
 
   // Editable preview: "Add column" appends an empty column to every host.
@@ -771,7 +781,7 @@
   });
 
   // On "Start import" an editable preview sends what the user edited: the
-  // table becomes JSON rows (a template per row under __template__).
+  // table becomes JSON rows (the templates of a row under __template__).
   $(document).on('submit', '#csvPreviewForm', function() {
     var table = document.getElementById('importTable');
     if (!table || table.getAttribute('data-editable') !== '1') { return; }
@@ -782,7 +792,9 @@
         entry[cell.getAttribute('data-col')] = cell.value;
       });
       var template = row.querySelector('.import-row-template');
-      if (template && template.value) { entry.__template__ = template.value; }
+      var chosen = template ? Array.prototype.map.call(
+        template.selectedOptions, function(opt) { return opt.value; }) : [];
+      if (chosen.length) { entry.__template__ = chosen; }
       rows.push(entry);
     });
     this.querySelector('textarea[name="csv_text"]').value = JSON.stringify(rows);

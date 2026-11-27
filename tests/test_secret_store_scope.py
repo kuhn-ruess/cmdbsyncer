@@ -348,26 +348,32 @@ def preview_rows(email, files=(), pasted=None, paste_format='auto'):
 
 
 def run_rows(email, rows, secret_columns=(), account='cmdb', hostname_column='cluster',
-             template_id=''):
+             template_id='', take_over=False):
     """Start the import of `rows` as the editable preview sends them."""
     import json as _json
     token = form_token(email, '/admin/host/')
-    web(email).post('/admin/host/csv_import_run', data={
+    data = {
         'csrf_token': token, 'return_to': '/admin/host/',
         'csv_text': _json.dumps(rows), 'import_format': 'json',
         'has_header': '1', 'hostname_column': hostname_column,
         'secret_columns': list(secret_columns), 'account': account,
         'template_id': template_id,
-    })
+    }
+    if take_over:
+        data['take_over'] = '1'
+    web(email).post('/admin/host/csv_import_run', data=data)
 
 
-def run_import(email, files, secret_columns, pasted=None, account='cmdb'):
+def run_import(email, files, secret_columns, pasted=None, account='cmdb',
+               take_over=False):
     """Upload or paste, then run the import with the preview's rows."""
-    run_rows(email, preview_rows(email, files, pasted), secret_columns, account)
+    run_rows(email, preview_rows(email, files, pasted), secret_columns, account,
+             take_over=take_over)
 
 
 # Unrestricted: the secrets land in the store, not in the labels.
-run_import('admin@example.com', [('a.yml', YAML_A)], ['checkmk_token', 'certificate'])
+run_import('admin@example.com', [('a.yml', YAML_A)], ['checkmk_token', 'certificate'],
+           take_over=True)
 entry = Secret.objects(name='host-a:checkmk_token').first()
 if entry is None or entry.get_password() != 'imported-token':
     fail('the imported token is not in the Secret Store')
@@ -526,28 +532,24 @@ host_b = Host.objects.get(hostname='host-b')
 if host_b.labels.get('env') == 'hijacked' or host_b.source_account_name != 'account-b':
     fail('a scoped user overwrote a host outside the scope')
 
-# Manual add: the dialog template is the default for every host and is
-# preselected in the preview; a template-restricted user only gets theirs.
+# The preview's templates apply to every host; a template-restricted user
+# is only offered theirs.
 allowed = Host(hostname='tmpl-allowed', object_type='template', is_object=True)
 allowed.save()
 person = User(email='by-template@example.com', name='by-template', roles=['host'],
               restrict_to_templates=['tmpl-allowed'])
 person.set_password('smoke-password')
 person.save()
-page = web('by-template@example.com').get('/admin/host/').get_data(as_text=True)
-dialog = re.search(r'<select[^>]*id="bulkAddTemplateId".*?</select>', page, re.S).group(0)
-if 'tmpl-allowed' not in dialog or 'tmpl-x' in dialog:
-    fail(f'the Manual add template list ignores the template scope: {dialog}')
-body = web('admin@example.com').post('/admin/host/bulk_add', data={
-    'csrf_token': form_token('admin@example.com', '/admin/host/'),
-    'return_to': '/admin/host/', 'hosts_text': 'dflt.example.com',
-    'template_id': str(template.id)}).get_data(as_text=True)
-if not re.search(r'<option value="%s"\\s+selected' % template.id, body):
-    fail('the dialog template is not preselected in the preview')
+body = web('by-template@example.com').post('/admin/host/bulk_add', data={
+    'csrf_token': form_token('by-template@example.com', '/admin/host/'),
+    'return_to': '/admin/host/', 'hosts_text': 'pick.example.com'}).get_data(as_text=True)
+picker = re.search(r'<select[^>]*id="csvTemplateId".*?</select>', body, re.S).group(0)
+if 'tmpl-allowed' not in picker or 'tmpl-x' in picker:
+    fail(f'the preview template list ignores the template scope: {picker}')
 run_rows('admin@example.com', [{'hostname': 'dflt.example.com'}],
          hostname_column='hostname', template_id=str(template.id))
 eq([t.id for t in Host.objects.get(hostname='dflt.example.com').cmdb_templates],
-   [template.id], 'the dialog template applies to every host')
+   [template.id], 'the preview templates apply to every host')
 # A forged template outside the scope is not assigned.
 run_rows('by-template@example.com', [{'hostname': 'forged-tmpl.example.com'},
                                      {'hostname': 'forged-row.example.com',
@@ -558,6 +560,45 @@ if forged is not None and template.id in [t.id for t in forged.cmdb_templates]:
     fail('a template-restricted user assigned a foreign template')
 if Host.objects(hostname='forged-row.example.com').count():
     fail('a template-restricted user assigned a foreign template per host')
+
+# Several templates: for every host, and per host instead of them.
+tmpl_y = Host(hostname='tmpl-y', object_type='template', is_object=True)
+tmpl_y.save()
+both = [str(template.id), str(tmpl_y.id)]
+run_rows('admin@example.com', [{'hostname': 'multi-one.example.com'},
+                               {'hostname': 'multi-two.example.com',
+                                '__template__': [str(tmpl_y.id)]}],
+         hostname_column='hostname', template_id=both)
+eq([t.id for t in Host.objects.get(hostname='multi-one.example.com').cmdb_templates],
+   [template.id, tmpl_y.id], 'several templates for every host')
+eq([t.id for t in Host.objects.get(hostname='multi-two.example.com').cmdb_templates],
+   [tmpl_y.id], 'own templates of a host')
+
+# An existing host of another account only gets the templates: account,
+# labels and its own templates stay.
+foreign = Host(hostname='foreign.example.com', source_account_name='account-b',
+               source_account_id='b-id', labels={'env': 'prod'},
+               cmdb_templates=[allowed])
+foreign.save()
+run_rows('admin@example.com', [{'hostname': 'foreign.example.com', 'env': 'changed'}],
+         hostname_column='hostname', template_id=both)
+foreign = Host.objects.get(hostname='foreign.example.com')
+eq([t.id for t in foreign.cmdb_templates], [allowed.id, template.id, tmpl_y.id],
+   'templates added to an existing host')
+eq((foreign.source_account_name, foreign.labels.get('env'), foreign.cmdb_fields),
+   ('account-b', 'prod', []), 'an existing host stays with its account')
+# Moved over on request, it takes the values of the import.
+run_rows('admin@example.com', [{'hostname': 'foreign.example.com', 'env': 'changed'}],
+         hostname_column='hostname', take_over=True)
+foreign = Host.objects.get(hostname='foreign.example.com')
+eq((foreign.source_account_name, foreign.labels.get('env')), ('cmdb', 'changed'),
+   'an existing host moved into the account')
+eq(len(foreign.cmdb_templates), 3, 'moving keeps the templates')
+# A host of the chosen account is updated without the option.
+run_rows('admin@example.com', [{'hostname': 'foreign.example.com', 'env': 'again'}],
+         hostname_column='hostname')
+eq(Host.objects.get(hostname='foreign.example.com').labels.get('env'), 'again',
+   'a host of the chosen account is updated')
 
 print('SECRET_MANUAL_OK')
 '''

@@ -66,27 +66,44 @@
             {% endfor %}
         </select>
         <small class="form-text text-muted">
-            Every host of this import, and with it its secrets, belongs to this account.
+            Every new host of this import, and with it its secrets, belongs to this account.
+        </small>
+    </div>
+
+    <div class="form-group form-check">
+        <input type="checkbox" class="form-check-input" id="importTakeOver"
+               name="take_over" value="1" {% if take_over %}checked{% endif %}>
+        <label class="form-check-label" for="importTakeOver">
+            Move existing hosts into this account
+        </label>
+        <small class="form-text text-muted">
+            Unchecked, an existing host of another account only gets the templates;
+            its account, labels and fields stay. Checked, it moves into this account
+            and gets the values of the import. Existing hosts of this account are
+            always updated.
         </small>
     </div>
 
     <div class="form-group">
-        <label for="csvTemplateId">Assign template (optional{% if editable %}, for every host without its own{% endif %})</label>
-        <select class="form-control" id="csvTemplateId" name="template_id">
-            <option value="">No template</option>
+        <label for="csvTemplateId">Assign templates (optional{% if editable %}, for every host without its own{% endif %})</label>
+        <select class="form-control" id="csvTemplateId" name="template_id" multiple size="4">
             {% for template in templates %}
             <option value="{{ template.id }}"
-                    {% if template.id|string == template_id %}selected{% endif %}>
+                    {% if template.id|string in template_ids %}selected{% endif %}>
                 {{ template.hostname }}
             </option>
             {% endfor %}
         </select>
+        <small class="form-text text-muted">
+            Ctrl or Cmd click selects several. An existing host gets them in addition
+            to the templates it already has.
+        </small>
     </div>
 
     <p class="text-muted">
         {% if editable %}
         All {{ row_count }} host(s). Edit any value, add a column or give a host
-        its own template before you start the import.
+        its own templates before you start the import.
         {% else %}
         Preview of the first {{ preview_rows|length }} of {{ row_count }} row(s);
         an import this big is not editable here.
@@ -101,6 +118,9 @@
     <div class="mb-2">
         <button type="button" class="btn btn-sm btn-outline-secondary" id="importAddColumn">
             <i class="fa fa-plus"></i> Add column
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="importRowTemplates">
+            <i class="fa fa-clone"></i> Templates per host
         </button>
     </div>
     {% endif %}
@@ -118,7 +138,7 @@
                         {% endif %}
                     </th>
                     {% endfor %}
-                    {% if editable %}<th class="import-template-col">Template</th>{% endif %}
+                    {% if editable %}<th class="import-template-col d-none">Templates</th>{% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -140,9 +160,9 @@
                     {% endif %}
                     {% endfor %}
                     {% if editable %}
-                    <td class="import-template-col">
-                        <select class="form-control form-control-sm import-row-template">
-                            <option value="">(as above)</option>
+                    <td class="import-template-col d-none">
+                        <select class="form-control form-control-sm import-row-template"
+                                multiple size="3" title="None selected: the templates above">
                             {% for template in templates %}
                             <option value="{{ template.id }}">{{ template.hostname }}</option>
                             {% endfor %}
@@ -161,7 +181,7 @@
     </div>
 
     <div class="form-group mb-0 text-right">
-        <button type="button" class="btn btn-secondary" data-dismiss="modal">Back</button>
+        <button type="button" class="btn btn-secondary" id="importBack" data-dismiss="modal">Back</button>
         <button type="submit" class="btn btn-primary">Start import</button>
     </div>
 </form>

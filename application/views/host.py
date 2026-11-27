@@ -3256,7 +3256,7 @@ Impact Chain.
             for row in data_rows
         ]
 
-    def _render_csv_preview(self, text, has_header, template_id, return_to,  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def _render_csv_preview(self, text, has_header, template_ids, return_to,  # pylint: disable=too-many-arguments,too-many-positional-arguments
                             import_format='csv'):
         """
         Render the CSV import preview: parse the text into columns + sample
@@ -3292,7 +3292,8 @@ Impact Chain.
             can_store_secrets=can_manage_secrets(current_user),
             secret_columns=suggested_secret_columns(columns, hostname_column),
             templates=list(_template_field_queryset()),
-            template_id=template_id,
+            template_ids=[str(tid) for tid in template_ids or []],
+            take_over=request.form.get('take_over') == '1',
             return_to=return_to,
         )
 
@@ -3326,8 +3327,9 @@ Impact Chain.
                 labels[col] = value
         return labels, inventory
 
-    def _bulk_upsert_host(self, row, template, actor_email,  # pylint: disable=too-many-locals,too-many-arguments,too-many-positional-arguments
-                          hostname_key='hostname', on_saved=None, account=None):
+    def _bulk_upsert_host(self, row, templates, actor_email,  # pylint: disable=too-many-locals,too-many-arguments,too-many-positional-arguments
+                          hostname_key='hostname', on_saved=None, account=None,
+                          take_over=False):
         """
         Create (or update) a single host from a CSV/list row using the
         same CMDB recipe as `on_model_change`. Returns True if a new host
@@ -3335,8 +3337,10 @@ Impact Chain.
         carried no hostname. `hostname_key` names the column that holds the
         hostname (the user picks it on the CSV import preview). `label_<x>`
         / `inventory_<x>` columns map back onto labels/inventory; `folder`
-        and a valid `lifecycle_state` pass through. Raises on a bad
-        hostname/label key — the caller counts it.
+        and a valid `lifecycle_state` pass through. `templates` are added
+        to the host, its own templates stay. An existing host of another
+        account only gets the templates, unless `take_over` moves it into
+        `account`. Raises on a bad hostname/label key — the caller counts it.
         """
         lower = {key.lower(): value for key, value in row.items() if key}
         hostname = (lower.get(hostname_key.lower()) or '').strip()
@@ -3352,6 +3356,14 @@ Impact Chain.
 
         account_name, account_id = account or (CMDB_SOURCE_ACCOUNT_NAME,
                                                CMDB_SOURCE_ACCOUNT_ID)
+        own_ids = [tmpl.id for tmpl in host.cmdb_templates]
+        new_templates = [tmpl for tmpl in templates if tmpl.id not in own_ids]
+        host.cmdb_templates.extend(new_templates)
+        if not is_new and not take_over and host.source_account_name != account_name:
+            # The host stays with its source: an import has to keep updating it.
+            self._save_templates_only(host, bool(new_templates), on_saved)
+            return False
+
         host.object_type = 'host'
         host.is_object = False
         host.source_account_id = account_id
@@ -3363,9 +3375,6 @@ Impact Chain.
         # Tag the label mutation so the Timeline shows who ran the import.
         host._label_change_source = 'manual'  # pylint: disable=protected-access
         host._label_change_user = actor_email  # pylint: disable=protected-access
-
-        if template is not None and template.id not in [t.id for t in host.cmdb_templates]:
-            host.cmdb_templates.append(template)
 
         folder = (lower.get('folder') or '').strip()
         if folder:
@@ -3415,25 +3424,52 @@ Impact Chain.
         return is_new
 
     @staticmethod
+    def _save_templates_only(host, changed, on_saved):
+        """Save the added templates of an existing host, nothing else."""
+        if changed:
+            host.cache = {}
+            host.save()
+        if on_saved is not None:
+            on_saved(host)
+
+    @staticmethod
+    def _row_templates(row, templates, default_templates):
+        """
+        The templates of a row: the ids under ROW_TEMPLATE_KEY (taken out of
+        the row), else `default_templates`. Raises on an id the user may not
+        assign.
+        """
+        row_ids = row.pop(ROW_TEMPLATE_KEY, None) or []
+        if not isinstance(row_ids, list):
+            row_ids = [row_ids]
+        row_ids = [str(tid) for tid in row_ids if tid]
+        for tid in row_ids:
+            if tid not in templates:
+                raise ValueError(f'template {tid} not allowed')
+        return [templates[tid] for tid in row_ids] or default_templates
+
+    @staticmethod
     def _store_row_secrets(host, secrets, counts):
         """Store a row's secrets for ``host``; counts ``[stored, refused]``."""
         stored, refused = store_row_secrets(current_user, host, secrets, 'GUI import')
         counts[0] += stored
         counts[1] += refused
 
-    def _run_bulk_host_create(self, rows, template_id, hostname_key='hostname',  # pylint: disable=too-many-locals,too-many-arguments,too-many-positional-arguments
-                              secret_columns=(), account=None):
+    def _run_bulk_host_create(self, rows, template_ids, hostname_key='hostname',  # pylint: disable=too-many-locals,too-many-arguments,too-many-positional-arguments
+                              secret_columns=(), account=None, take_over=False):
         """
         Apply `_bulk_upsert_host` to every row and flash a summary. A bad
         row is counted as skipped instead of aborting the whole batch.
         `hostname_key` names the column carrying the hostname, `account`
-        the ``(name, id)`` every host gets. A row may name its own template
-        under ROW_TEMPLATE_KEY; only templates the user may assign count.
+        the ``(name, id)`` every host gets. A row may name its own templates
+        (a list of ids) under ROW_TEMPLATE_KEY, they replace `template_ids`
+        for that row; only templates the user may assign count.
         """
         templates = {str(tmpl.id): tmpl for tmpl in _template_field_queryset()}
-        template = templates.get(str(template_id)) if template_id else None
-        if template_id and template is None:
-            flash('Selected template not found: hosts created without a template.',
+        template_ids = [str(tid) for tid in template_ids or [] if tid]
+        default_templates = [templates[tid] for tid in template_ids if tid in templates]
+        if len(default_templates) < len(template_ids):
+            flash('A selected template was not found: hosts get only the others.',
                   'warning')
 
         created = updated = skipped = 0
@@ -3446,13 +3482,11 @@ Impact Chain.
             store_secrets = partial(self._store_row_secrets,
                                     secrets=split_secrets(row, secret_columns),
                                     counts=secret_counts)
-            row_template_id = str(row.pop(ROW_TEMPLATE_KEY, '') or '')
             try:
-                if row_template_id and row_template_id not in templates:
-                    raise ValueError(f'template {row_template_id} not allowed')
                 result = self._bulk_upsert_host(
-                    row, templates.get(row_template_id, template), actor_email,
-                    hostname_key, on_saved=store_secrets, account=account)
+                    row, self._row_templates(row, templates, default_templates),
+                    actor_email, hostname_key,
+                    on_saved=store_secrets, account=account, take_over=take_over)
             except Exception as exc:  # pylint: disable=broad-exception-caught
                 skipped += 1
                 if len(errors) < 5:
@@ -3530,7 +3564,7 @@ Impact Chain.
         except ValueError as exc:
             return _preview_error(str(exc), return_to)
         return self._render_csv_preview(
-            text, True, request.form.get('template_id', ''), return_to,
+            text, True, request.form.getlist('template_id'), return_to,
             import_format=import_format)
 
     @staticmethod
@@ -3584,7 +3618,7 @@ Impact Chain.
             has_header = request.form.get('has_header') == '1'
 
         return self._render_csv_preview(
-            text, has_header, request.form.get('template_id', ''), return_to,
+            text, has_header, request.form.getlist('template_id'), return_to,
             import_format=import_format)
 
     @expose('/csv_import_run', methods=['POST'])
@@ -3620,10 +3654,11 @@ Impact Chain.
 
         rows = self._rows_as_dicts(columns, data_rows)
         self._run_bulk_host_create(
-            rows, request.form.get('template_id') or None,
+            rows, request.form.getlist('template_id'),
             hostname_key=hostname_column,
             secret_columns=secret_columns,
             account=account,
+            take_over=request.form.get('take_over') == '1',
         )
         return redirect(return_to)
 
