@@ -229,7 +229,10 @@ def jobs():  # pylint: disable=too-many-branches,too-many-statements
     _register_dynamic_tasks()
     checked = 0
     started = []
-    for job in CronGroup.objects(enabled=True).order_by('sort_field'):
+    # Groups triggered by a webhook, the API or Run go first, so they
+    # don't wait behind long scheduled groups. The order stays otherwise.
+    for job in sorted(CronGroup.objects(enabled=True).order_by('sort_field'),
+                      key=lambda group: not (group.run_once_next or group.run_once_configs)):
         checked += 1
         stats = get_stats(job.name)
         _reset_stale_lock(stats)
