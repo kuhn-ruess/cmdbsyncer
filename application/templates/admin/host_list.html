@@ -1,4 +1,6 @@
 {% extends 'admin/model/list.html' %}
+{% import 'admin/model/layout.html' as model_layout with context %}
+{% import 'admin/actions.html' as actionlib with context %}
 
 {% block body %}
 {% if saved_searches is defined %}
@@ -31,29 +33,6 @@
   {% else %}
     <span class="text-muted" style="font-size: 0.9rem;">none yet</span>
   {% endif %}
-  {% if cmdb_mode and not user_readonly %}
-  <button type="button" class="btn btn-sm btn-outline-primary"
-          data-toggle="modal" data-target="#bulkAddModal"
-          title="Add hosts by hand: paste hostnames, CSV, YAML or a key/value list, then edit every host in the preview"
-          style="margin-left: auto;">
-    <i class="fa fa-plus-square"></i> Add hosts manually
-  </button>
-  <button type="button" class="btn btn-sm btn-outline-secondary"
-          data-toggle="modal" data-target="#csvImportModal"
-          title="Import hosts from a CSV file (round-trips the Export CSV format) or from YAML files (one or several hosts per file)">
-    <i class="fa fa-upload"></i> Import CSV / YAML
-  </button>
-  {% endif %}
-  <a href="{{ url_for('.export_csv') }}{% if request.query_string %}?{{ request.query_string.decode('utf-8') }}{% endif %}"
-     class="btn btn-sm btn-outline-secondary"
-     title="Download the currently filtered hosts as CSV (uses the configured export label/inventory fields)"
-     {% if not cmdb_mode %}style="margin-left: auto;"{% endif %}>
-    <i class="fa fa-download"></i> Export CSV
-  </a>
-  <button type="button" class="btn btn-sm btn-outline-secondary"
-          data-toggle="modal" data-target="#savePresetModal">
-    <i class="fa fa-plus"></i> Save current filter
-  </button>
 </div>
 
 <div class="modal fade" id="savePresetModal" tabindex="-1" role="dialog">
@@ -419,12 +398,13 @@
      aria-labelledby="bulkAddModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg" role="document">
     <div class="modal-content">
-      <form method="POST" id="bulkAddForm" action="{{ url_for('.bulk_add_process') }}">
+      <form method="POST" id="bulkAddForm" action="{{ url_for('.bulk_add_process') }}"
+            enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="return_to" value="{{ request.full_path }}">
 
         <div class="modal-header">
-          <h5 class="modal-title" id="bulkAddModalLabel">Manual add</h5>
+          <h5 class="modal-title" id="bulkAddModalLabel">Add hosts</h5>
           <button type="button" class="close" data-dismiss="modal" aria-label="Close">
             <span aria-hidden="true">&times;</span>
           </button>
@@ -434,7 +414,7 @@
           <div class="form-group">
             <label for="bulkAddText">Hostnames, CSV, YAML or key/value list</label>
             <textarea class="form-control" id="bulkAddText" name="hosts_text"
-                      rows="10" required
+                      rows="10"
                       placeholder="One hostname per line, e.g.&#10;web01.example.com&#10;web02.example.com&#10;&#10;or paste CSV with a header row:&#10;hostname,label_env,inventory_os&#10;db01,production,linux&#10;&#10;or YAML, hosts separated by ---:&#10;cluster: ocp-prd.example.com&#10;api: https://api.example.com:6443"></textarea>
             <small class="form-text text-muted">
               Everything opens in a preview first: pick the hostname column, the
@@ -445,7 +425,7 @@
             </small>
           </div>
 
-          <div class="form-group mb-0">
+          <div class="form-group">
             <label for="bulkAddFormat">Format</label>
             <select class="form-control" id="bulkAddFormat" name="paste_format">
               <option value="auto">Auto detect</option>
@@ -455,47 +435,16 @@
               <option value="kv">Key/value list (key: value, key=value or tab separated; an empty line or --- starts the next host)</option>
             </select>
           </div>
-        </div>
 
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-primary">Continue</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
-<div class="modal fade" id="csvImportModal" tabindex="-1" role="dialog"
-     aria-labelledby="csvImportModalLabel" aria-hidden="true">
-  <div class="modal-dialog" role="document">
-    <div class="modal-content">
-      <form method="POST" id="csvImportForm" action="{{ url_for('.csv_import') }}"
-            enctype="multipart/form-data">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="return_to" value="{{ request.full_path }}">
-
-        <div class="modal-header">
-          <h5 class="modal-title" id="csvImportModalLabel">Import hosts from CSV or YAML</h5>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
-        </div>
-
-        <div class="modal-body">
           <div class="form-group mb-0">
-            <label for="csvImportFile">CSV or YAML file(s)</label>
+            <label for="csvImportFile">Or upload CSV or YAML file(s)</label>
             <input type="file" class="form-control-file" id="csvImportFile"
-                   name="csv_file" accept=".csv,text/csv,.yml,.yaml" multiple required>
+                   name="csv_file" accept=".csv,text/csv,.yml,.yaml" multiple>
             <small class="form-text text-muted">
-              After upload you pick the hostname column and assign an optional
-              template. Every other column becomes a host label;
-              <code>inventory_&lt;name&gt;</code> columns go to the inventory.
-              A YAML file can hold several hosts: a list of <code>key: value</code>
-              mappings or several documents separated by <code>---</code>; several
-              files can be uploaded at once. A CSV holds one host per row. Columns
-              holding tokens or certificates can be sent to the Secret Store
-              instead of becoming labels.
+              One CSV with a header row, or one or more YAML files. A YAML file
+              can hold several hosts: a list of <code>key: value</code> mappings
+              or documents separated by <code>---</code>. The CSV of Export → CSV
+              can be imported again.
             </small>
           </div>
         </div>
@@ -526,6 +475,86 @@
   </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{#- Create and Export of Flask-Admin as dropdowns: they also hold "Add
+    hosts" (paste or upload, CMDB mode) and the CSV export. "Save filter"
+    sits next to the search. The rest is Flask-Admin's own menu bar. -#}
+{% block model_menu_bar %}
+<ul class="nav nav-tabs">
+    <li class="nav-item">
+        <a href="javascript:void(0)" class="nav-link active">{{ _gettext('List') }}{% if count %} ({{ count }}){% endif %}</a>
+    </li>
+
+    {% if admin_view.can_create %}
+    <li class="nav-item dropdown">
+        <a class="nav-link dropdown-toggle" data-toggle="dropdown" href="javascript:void(0)"
+           role="button" aria-haspopup="true" aria-expanded="false">{{ _gettext('Create') }}</a>
+        <div class="dropdown-menu">
+            <a class="dropdown-item" href="{{ get_url('.create_view', url=return_url) }}"
+               title="Create one host in the form">One host</a>
+            {% if cmdb_mode and not user_readonly %}
+            <a class="dropdown-item" href="javascript:void(0)"
+               data-toggle="modal" data-target="#bulkAddModal"
+               title="Paste hostnames, CSV, YAML or a key/value list, or upload CSV / YAML files, then edit every host in the preview">Several hosts (paste or upload)</a>
+            {% endif %}
+        </div>
+    </li>
+    {% endif %}
+
+    <li class="nav-item dropdown">
+        <a class="nav-link dropdown-toggle" data-toggle="dropdown" href="javascript:void(0)"
+           role="button" aria-haspopup="true" aria-expanded="false">{{ _gettext('Export') }}</a>
+        <div class="dropdown-menu">
+            <a class="dropdown-item"
+               href="{{ url_for('.export_csv') }}{% if request.query_string %}?{{ request.query_string.decode('utf-8') }}{% endif %}"
+               title="The filtered hosts as CSV, with the configured export labels and inventory fields; Create can import it again">CSV</a>
+            {% if admin_view.can_export %}
+            {% for export_type in admin_view.export_types %}
+            <a class="dropdown-item"
+               href="{{ get_url('.export', export_type=export_type, **request.args) }}"
+               title="The filtered hosts as rules file for Import on another Syncer">{{ 'Rules file' if export_type == 'syncer_rules' else export_type|upper }}</a>
+            {% endfor %}
+            {% endif %}
+        </div>
+    </li>
+
+    {% block model_menu_bar_before_filters %}{% endblock %}
+
+    {% if filters %}
+    <li class="nav-item dropdown">
+        {{ model_layout.filter_options() }}
+    </li>
+    {% endif %}
+
+    {% if can_set_page_size %}
+    <li class="nav-item dropdown">
+        {{ model_layout.page_size_form(page_size_url, admin_view.page_size_options) }}
+    </li>
+    {% endif %}
+
+    {% if actions %}
+    <li class="nav-item dropdown">
+        {{ actionlib.dropdown(actions) }}
+    </li>
+    {% endif %}
+
+    {% if search_supported %}
+    <li class="nav-item ml-2">
+        {{ model_layout.search_form() }}
+    </li>
+    {% endif %}
+    {% if saved_searches is defined %}
+    <li class="nav-item">
+        <a class="nav-link" href="javascript:void(0)" data-toggle="modal"
+           data-target="#savePresetModal"
+           title="Save the current filters and search as a Saved Search">
+            <i class="fa fa-bookmark-o"></i> Save filter
+        </a>
+    </li>
+    {% endif %}
+    {% block model_menu_bar_after_filters %}{% endblock %}
+</ul>
 {% endblock %}
 
 {% block tail %}
@@ -724,7 +753,6 @@
       $('#csvPreviewModalLabel').text(title);
       $('#csvPreviewBody').html(html);
       $('#bulkAddModal').modal('hide');
-      $('#csvImportModal').modal('hide');
       $('#csvPreviewModal').modal('show');
     }).catch(function(err) {
       alert('Could not build the import preview: ' + err.message);
@@ -737,14 +765,10 @@
     previewBack = false;
   });
 
-  // Uploads and Manual add both go through the preview modal.
-  $(document).on('submit', '#csvImportForm', function(ev) {
-    ev.preventDefault();
-    loadCsvPreview(this, 'Import CSV / YAML: preview');
-  });
+  // Pasted text and uploads go through the preview modal.
   $(document).on('submit', '#bulkAddForm', function(ev) {
     ev.preventDefault();
-    loadCsvPreview(this, 'Manual add: preview');
+    loadCsvPreview(this, 'Add hosts: preview');
   });
 
   // Editable preview: "Templates per host" shows the template column.

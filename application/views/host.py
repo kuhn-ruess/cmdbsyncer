@@ -214,8 +214,8 @@ def _preview_error(message, return_to):
 
 def _import_account_choices():
     """
-    (value, label) choices for the account of a manual import (Import CSV /
-    YAML, Manual add): the accounts the user may assign. A user limited to
+    (value, label) choices for the account of a manual import (Add
+    hosts): the accounts the user may assign. A user limited to
     accounts must pick one of theirs; everybody else may also keep the
     CMDB sentinel, which is the default.
     """
@@ -3261,7 +3261,7 @@ Impact Chain.
         """
         Render the CSV import preview: parse the text into columns + sample
         rows and let the user pick which column holds the hostname before
-        anything is created. Shared by the file upload and by "Manual add".
+        anything is created. Used for pasted text and uploaded files of "Add hosts".
         Up to EDITABLE_PREVIEW_ROWS rows the table is editable: values per
         host, added columns and a template per host. The account picker
         offers the accounts the user may assign. Flashes and redirects when
@@ -3515,7 +3515,7 @@ Impact Chain.
     def _pasted_import_text(cls, raw, paste_format='auto'):
         """
         ``(text, import_format)`` of pasted text for the preview. The format
-        is picked on the Manual add form: ``hosts`` (one hostname per line),
+        is picked on the Add hosts form: ``hosts`` (one hostname per line),
         ``csv``, ``yaml``, ``kv`` (a key/value list: ``key: value``,
         ``key=value`` or tab separated, hosts split by an empty line or
         ``---``) or ``auto``, which tells YAML, CSV and a host list apart.
@@ -3540,27 +3540,35 @@ Impact Chain.
     @expose('/bulk_add', methods=['POST'])
     def bulk_add_process(self):
         """
-        "Manual add": pasted hostnames (one per line), CSV or YAML. All of
-        them go through the editable import preview, where values, template
-        and account are set before anything is created. CMDB mode only.
+        "Add hosts": pasted text (host list, CSV, YAML or key/value list)
+        or uploaded CSV / YAML files. All of them go through the editable
+        import preview, where values, templates and account are set before
+        anything is created. CMDB mode only.
         """
         return_to = _safe_return_to(request.form.get('return_to'))
         if not app.config.get('CMDB_MODE'):
-            flash('Manual add is only available in CMDB mode.', 'error')
+            flash('Adding hosts is only available in CMDB mode.', 'error')
             return redirect(return_to)
         if not current_user.is_authenticated or not current_user.has_right('host'):
             return Response("Unauthorized", status=401)
 
         raw = request.form.get('hosts_text', '') or ''
-        if not raw.strip():
-            return _preview_error('Please paste at least one hostname.', return_to)
+        uploads = [upload for upload in request.files.getlist('csv_file')
+                   if upload and upload.filename]
+        if raw.strip() and uploads:
+            return _preview_error('Paste text or choose files, not both.', return_to)
+        if not raw.strip() and not uploads:
+            return _preview_error('Please paste hosts or choose a file.', return_to)
 
         # Everything goes through the preview: the user picks the hostname
         # column, the Secret Store columns and the account, and edits the
         # values per host before anything is created.
         try:
-            text, import_format = self._pasted_import_text(
-                raw, request.form.get('paste_format') or 'auto')
+            if uploads:
+                text, import_format = self._read_import_uploads(uploads)
+            else:
+                text, import_format = self._pasted_import_text(
+                    raw, request.form.get('paste_format') or 'auto')
         except ValueError as exc:
             return _preview_error(str(exc), return_to)
         return self._render_csv_preview(
@@ -3591,10 +3599,9 @@ Impact Chain.
     @expose('/csv_import', methods=['POST'])
     def csv_import(self):
         """
-        Step 1 of CSV import: read the uploaded file (or a re-submitted
-        preview when the header toggle changed), then render a preview
-        where the user picks which column holds the hostname before any
-        host is created. Nothing is written here. CMDB mode only.
+        Re-render the import preview when its header toggle changed: the
+        already-read text comes back in a hidden field. Nothing is written
+        here. CMDB mode only.
         """
         return_to = _safe_return_to(request.form.get('return_to'))
         if not app.config.get('CMDB_MODE'):
@@ -3603,23 +3610,10 @@ Impact Chain.
         if not current_user.is_authenticated or not current_user.has_right('host'):
             return Response("Unauthorized", status=401)
 
-        # A fresh upload carries the file; a re-preview (header toggle)
-        # re-submits the already-read text in a hidden field.
-        text = request.form.get('csv_text')
-        import_format = request.form.get('import_format') or 'csv'
-        if text is None:
-            try:
-                text, import_format = self._read_import_uploads(
-                    request.files.getlist('csv_file'))
-            except ValueError as exc:
-                return _preview_error(str(exc), return_to)
-            has_header = True
-        else:
-            has_header = request.form.get('has_header') == '1'
-
         return self._render_csv_preview(
-            text, has_header, request.form.getlist('template_id'), return_to,
-            import_format=import_format)
+            request.form.get('csv_text') or '', request.form.get('has_header') == '1',
+            request.form.getlist('template_id'), return_to,
+            import_format=request.form.get('import_format') or 'csv')
 
     @expose('/csv_import_run', methods=['POST'])
     def csv_import_run(self):

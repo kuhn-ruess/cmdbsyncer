@@ -331,7 +331,7 @@ def preview_rows(email, files=(), pasted=None, paste_format='auto'):
     session = web(email)
     token = form_token(email, '/admin/host/')
     if pasted is None:
-        preview = session.post('/admin/host/csv_import', data={
+        preview = session.post('/admin/host/bulk_add', data={
             'csrf_token': token, 'return_to': '/admin/host/',
             'csv_file': [(io.BytesIO(text.encode()), name) for name, text in files],
         }, content_type='multipart/form-data')
@@ -468,6 +468,33 @@ body = web('admin@example.com').post('/admin/host/bulk_add', data={
     'hosts_text': "hostname,env" + NL + "csv-one.example.com,prod"}).get_data(as_text=True)
 if 'csv-one.example.com' not in body or 'importTable' not in body:
     fail('CSV mode does not open the preview')
+
+# Create and Export of the host list hold Add hosts and the CSV export.
+page = web('admin@example.com').get('/admin/host/').get_data(as_text=True)
+bar = re.search(r'<ul class="nav nav-tabs">.*?</ul>', page, re.S).group(0)
+for needed in ('One host', 'data-target="#bulkAddModal"', '/admin/host/csv',
+               'Rules file', 'data-target="#savePresetModal"'):
+    if needed not in bar:
+        fail(f'the host menu bar misses {needed}')
+if page.count('data-target="#bulkAddModal"') != 1 or page.count('/admin/host/csv"') > 1:
+    fail('Add hosts or Export CSV is still offered twice')
+
+# One dialog: text or files, not both and not neither.
+for data, message in (({'hosts_text': 'x.example.com',
+                        'csv_file': [(io.BytesIO(b'cluster: y'), 'y.yml')]}, 'not both'),
+                      ({'hosts_text': ''}, 'paste hosts or choose a file')):
+    body = web('admin@example.com').post('/admin/host/bulk_add', data=dict(
+        data, csrf_token=token, return_to='/admin/host/'),
+        content_type='multipart/form-data',
+        headers={'X-Requested-With': 'XMLHttpRequest'}).get_data(as_text=True)
+    if message not in body:
+        fail(f'add hosts without "{message}": {body[:300]}')
+# The header toggle re-renders the preview from the text it already read.
+body = web('admin@example.com').post('/admin/host/csv_import', data={
+    'csrf_token': token, 'return_to': '/admin/host/', 'import_format': 'csv',
+    'csv_text': "hostname,env" + NL + "hdr.example.com,prod"}).get_data(as_text=True)
+if 'value="hostname"' not in body or 'hdr.example.com' not in body:
+    fail('the header toggle does not re-render the preview without header')
 
 # A plain host list only opens the preview, nothing is created yet.
 preview_rows('admin@example.com', pasted="list-only.example.com")

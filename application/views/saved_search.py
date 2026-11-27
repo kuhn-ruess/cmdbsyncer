@@ -6,7 +6,7 @@ Two surfaces:
     lets the owner browse / delete / toggle shared on their presets.
   * `register_saved_search_routes(host_view)` — wires `/save` and
     `/delete_preset/<id>` POST routes onto an existing list view (here
-    HostModelView) so the inline "Save current filter" button can call
+    HostModelView) so the "Save filter" link of the menu bar can call
     them without leaving the host list page.
 """
 from flask import flash, redirect, request, url_for
