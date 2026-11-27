@@ -69,6 +69,23 @@
         shows which values each attribute has.
     </p>
 
+    {% if current_user.has_right('host') %}
+    {# ---- Templates by host list (write action, own page) ---- #}
+    <div class="app-card" style="padding: 0.75rem 1rem; margin-bottom: 1rem;
+         display: flex; align-items: center; justify-content: space-between;
+         gap: 1rem; flex-wrap: wrap;">
+        <div>
+            <strong>Templates by host list</strong>
+            <div class="text-muted" style="font-size: 0.9em;">
+                Assign a CMDB template to pasted hostnames or remove it from them.
+            </div>
+        </div>
+        <a class="btn btn-outline-primary btn-sm" href="{{ url_for('.host_templates') }}">
+            <i class="fa fa-tags"></i> Open
+        </a>
+    </div>
+    {% endif %}
+
     {% if current_user.has_right('host') and uppercase_count %}
     {# ---- Hostname normalisation (write action) ---- #}
     <div class="app-card" style="padding: 0.75rem 1rem; margin-bottom: 1rem;

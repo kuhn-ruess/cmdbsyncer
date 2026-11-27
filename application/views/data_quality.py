@@ -47,6 +47,11 @@ _EMPTY_FIELD_HOST_LIMIT = 50
 _MISSING_FIELD_FREQ_LIMIT = 25
 _SOURCE_STALE_HOURS = 24
 _SOURCE_VERY_STALE_DAYS = 7
+# Host list template page: mode -> helper in application.models.host_templates.
+_TEMPLATE_MODES = {
+    'assign': 'assign_template_by_hostname',
+    'remove': 'remove_template_by_hostname',
+}
 
 
 def _normalize_hostname(name):
@@ -258,6 +263,33 @@ def _collect(now):  # pylint: disable=too-many-locals
     }
 
 
+def _change_templates(mode, template, names, apply):
+    """
+    Assign ``template`` to the hosts ``names`` or remove it from them
+    (``mode``), only planning unless ``apply``. Archived hosts and hosts the
+    current user may not see count as missing. Returns the hostnames per outcome:
+    ``changed``, ``unchanged`` and ``missing``.
+    """
+    # pylint: disable=import-outside-toplevel
+    from application.models import host_templates
+    from application.views.host import _scope_hosts_to_user
+    visible = set(_scope_hosts_to_user(
+        Host.objects(hostname__in=names, object_type__ne='template',
+                     deleted_at__exists=False)
+    ).scalar('hostname'))
+    change = getattr(host_templates, _TEMPLATE_MODES[mode])
+    outcome = change(template, [name for name in names if name in visible],
+                     dry_run=not apply)
+    changed, unchanged = (('assigned', 'already') if mode == 'assign'
+                          else ('removed', 'not_carried'))
+    return {
+        'changed': outcome[changed],
+        'unchanged': outcome[unchanged],
+        'missing': outcome['missing']
+                   + [name for name in names if name not in visible],
+    }
+
+
 def _csv_response(filename, header, rows):
     """Build a streamed CSV response so operators can hand off findings."""
     buf = io.StringIO()
@@ -412,6 +444,44 @@ class DataQualityView(BaseView):
                     "see “Possible duplicate hostnames” below and merge by hand.")
         flash(msg, 'warning' if result['collisions'] else 'success')
         return redirect(url_for('.index'))
+
+    @expose('/host_templates', methods=['GET', 'POST'])
+    def host_templates(self):
+        """
+        Give a CMDB template to the hosts of a pasted host list, or take it
+        off them. The first POST shows what would happen, the confirmed one
+        writes it. Hosts the user may not see count as not found.
+        """
+        if not app.config.get('CMDB_MODE'):
+            abort(404)
+        # pylint: disable=import-outside-toplevel
+        from application.views.host import _template_field_queryset
+        templates = list(_template_field_queryset().only('hostname'))
+        form = {key: request.form.get(key, '')
+                for key in ('hostnames', 'template_id', 'mode')}
+        if form['mode'] not in _TEMPLATE_MODES:
+            form['mode'] = 'assign'
+        result = None
+        if request.method == 'POST':
+            names = list(dict.fromkeys(
+                name for name in re.split(r'[\s,;]+', form['hostnames']) if name))
+            template = next((tpl for tpl in templates
+                             if str(tpl.id) == form['template_id']), None)
+            if not names or not template:
+                flash('Paste hostnames and pick a template', 'error')
+                return redirect(url_for('.host_templates'))
+            apply = bool(request.form.get('apply'))
+            if apply and not current_user.has_right('host'):
+                flash('You need the Hosts right to change templates.', 'error')
+                return redirect(url_for('.host_templates'))
+            result = _change_templates(form['mode'], template, names, apply)
+            if apply:
+                verb = 'Assigned' if form['mode'] == 'assign' else 'Removed'
+                flash(f"{verb} template '{template.hostname}': "
+                      f"{len(result['changed'])} host(s)", 'success')
+                return redirect(url_for('.host_templates'))
+        return self.render('admin/data_quality_host_templates.html',
+                           templates=templates, form=form, result=result)
 
     @staticmethod
     def _export(section, data):

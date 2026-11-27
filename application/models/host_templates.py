@@ -229,6 +229,35 @@ def assign_template_by_hostname(template, hostnames, dry_run=False):
     return result
 
 
+def remove_template_by_hostname(template, hostnames, dry_run=False):
+    """
+    Take ``template`` off every host of ``hostnames``. The other templates
+    of a host stay; a host without it is left alone. ``dry_run`` only
+    reports what would happen.
+
+    Returns:
+        dict: the hostnames per outcome, ``removed`` (carried the template),
+        ``not_carried`` (exists without it) and ``missing`` (no such host).
+    """
+    # pylint: disable=import-outside-toplevel
+    from application.models.host import Host
+    names = list(hostnames)
+    hosts = Host.objects(hostname__in=names, object_type__ne='template')
+    known = set(hosts.scalar('hostname'))
+    carriers = set(hosts.filter(cmdb_templates=template.id).scalar('hostname'))
+    if carriers and not dry_run:
+        # Template values are merged into the cached export attributes,
+        # so the cache has to go together with the assignment.
+        Host.objects(hostname__in=list(carriers)).update(
+            pull__cmdb_templates=template.id, set__cache={})
+    return {
+        'removed': [name for name in names if name in carriers],
+        'not_carried': [name for name in names
+                        if name in known and name not in carriers],
+        'missing': [name for name in names if name not in known],
+    }
+
+
 def sync_template_assignment(template, remove_stale=False):
     """
     Re-run one template's label match over the whole database and give
