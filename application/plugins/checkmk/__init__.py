@@ -10,6 +10,7 @@ from mongoengine.errors import DoesNotExist
 from application import log
 from .cmk2 import cli_cmk, CmkException
 from application.helpers.cron import register_cronjob, register_import
+from application.helpers.run_lock import exclusive_per_account
 from application.helpers.task_status import task_failed
 from application.modules.debug import ColorCodes, attribute_table
 from application.models.host_templates import active_templates
@@ -139,6 +140,7 @@ def show_labels():
         print(f"{key}:{value}")
 #.
 #   .-- Command: Export Hosts
+@exclusive_per_account('Checkmk: Export Hosts')
 def _inner_export_hosts(account, limit=False, debug=False, dry_run=False, save_requests=False):
     syncer = None
     try:

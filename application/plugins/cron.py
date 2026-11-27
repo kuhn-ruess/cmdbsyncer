@@ -10,6 +10,8 @@ from application import app, cron_register, log
 from application.enterprise import run_hook
 from application.helpers import crontab
 from application.helpers.get_account import account_overrides
+from application.helpers.run_lock import (pid_alive as _pid_alive,
+                                          process_start as _process_start)
 from application.helpers.task_status import take_task_failure
 from application.modules.debug import ColorCodes as CC
 from application.models.config import Config
@@ -40,37 +42,6 @@ def _run_task(task, config=None):
         cron_register[task.command]()
     if (failure := take_task_failure()) is not None:
         raise failure
-
-
-def _pid_alive(pid):
-    """
-    Signal 0 does not send a signal but performs the existence / permission
-    check. Anything raising means the process is gone.
-    """
-    if not pid:
-        return False
-    try:
-        os.kill(int(pid), 0)
-    except (OSError, ValueError):
-        return False
-    return True
-
-
-def _process_start(pid):
-    """
-    Local start time of the process ``pid``, from /proc. None where /proc
-    is missing (not Linux) or the process is gone.
-    """
-    try:
-        with open(f"/proc/{int(pid)}/stat", encoding="ascii") as handle:
-            # The name in brackets may hold spaces, the fields after it don't
-            ticks = int(handle.read().rsplit(")", 1)[1].split()[19])
-        with open("/proc/stat", encoding="ascii") as handle:
-            boot = next(int(line.split()[1]) for line in handle
-                        if line.startswith("btime "))
-        return datetime.fromtimestamp(boot + ticks / os.sysconf("SC_CLK_TCK"))
-    except (OSError, ValueError, IndexError, StopIteration):
-        return None
 
 
 def _pid_reused(stats):

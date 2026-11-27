@@ -96,6 +96,7 @@ not_exported = {
     'EdaEventState': 'Event Driven Ansible repeat tracking per host',
     'CheckmkRuleAnalysis': 'Result of the last rule analysis run',
     'CronStats': 'Cronjob run statistics',
+    'RunLock': 'Lock of a running export, exists only during the run',
     'FieldApproval': 'Approval queue, tied to live hosts',
     'HostInventoryTree': 'Inventory data of a single host',
     'HostLabelEvent': 'Label change history',

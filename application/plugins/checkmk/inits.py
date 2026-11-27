@@ -9,6 +9,7 @@ from application.models.host_templates import (
     get_template,
     assign_template_by_hostname,
 )
+from application.helpers.run_lock import exclusive_per_account
 from application.helpers.task_status import task_failed
 from application.helpers.get_account import account_allows
 from application.modules.rule.filter import Filter
@@ -99,6 +100,7 @@ def _load_rules():
     }
 
 #   .-- Export Tags
+@exclusive_per_account('Checkmk: Export Tags')
 def export_tags(account, dry_run=False, save_requests=False, debug=False):
     """
     Export Tags to Checkmk
@@ -121,6 +123,7 @@ def export_tags(account, dry_run=False, save_requests=False, debug=False):
 
 #.
 #   .-- Export BI Rules
+@exclusive_per_account('Checkmk: Export BI Rules')
 def export_bi_rules(account, debug):
     """
     Export BI Rules to Checkmk
@@ -149,6 +152,7 @@ def export_bi_rules(account, debug):
                     "cmk_bi_sync", debug)
 #.
 #   .-- Export BI Aggregations
+@exclusive_per_account('Checkmk: Export BI Aggregations')
 def export_bi_aggregations(account, debug):
     """
     Export BI Aggregations to Checkmk
@@ -384,6 +388,7 @@ def analyse_rules(account=None, min_hosts=10, top=20, apply=False,
 
 #.
 #   .-- Export Groups
+@exclusive_per_account('Checkmk: Export Groups')
 def export_groups(account, test_run=False, debug=False):
     """
     Manage Groups in Checkmk
@@ -431,6 +436,7 @@ def _template_actions(rules):
     return actions
 
 
+@exclusive_per_account('Checkmk: Export Rules')
 def export_rules(account, dry_run=False, debug=False):
     """
     Create Rules in Checkmk
@@ -647,6 +653,7 @@ def assign_cmdb_template_from_folder(account, folder, template_name,
         raise
 #.
 #   .-- Export Notification Rules
+@exclusive_per_account('Checkmk: Export Notification Rules')
 def export_notifications(account, dry_run=False, debug=False):
     """
     Create / clean Notification Rules in Checkmk
@@ -669,6 +676,7 @@ def export_notifications(account, dry_run=False, debug=False):
                     "cmk_notification_rule_sync", debug)
 #.
 #   .-- Export Downtimes
+@exclusive_per_account('Checkmk: Export Downtimes')
 def export_downtimes(account, debug=False, debug_rules=False):
     """
     Create Rules in Checkmk
@@ -710,6 +718,7 @@ def export_downtimes(account, debug=False, debug_rules=False):
                     "cmk_downtime_sync", debug, label='Error')
 #.
 #   .-- Export Service Labels
+@exclusive_per_account('Checkmk: Export Service Labels')
 def export_service_labels(account, dry_run=False, debug=False, debug_rules=False):
     """
     Create the Service Label rules in Checkmk
@@ -736,6 +745,7 @@ def export_service_labels(account, dry_run=False, debug=False, debug_rules=False
                     "cmk_service_label_sync", debug, label='Error')
 #.
 #   . DCD Rules
+@exclusive_per_account('Checkmk: Export DCD Rules')
 def export_dcd_rules(account, debug=False, debug_rules=False):
     """
     Export DCD Rules to Checkmk
@@ -788,6 +798,7 @@ def export_dcd_rules(account, debug=False, debug_rules=False):
                     "cmk_dcd_rule_sync", debug)
 #.
 #   . Passwords
+@exclusive_per_account('Checkmk: Export Passwords')
 def export_passwords(account):
     """
     Export Passwords to Checkmk
@@ -811,6 +822,7 @@ def import_sites(account):
         _job_failed(error_obj, syncer, f"Import Sites from Account {account} not started",
                     "cmk_site_sync")
 #   . Export Users
+@exclusive_per_account('Checkmk: Export Users')
 def export_users(account):
     """
     Export configured Users to Checkmk
@@ -824,6 +836,7 @@ def export_users(account):
                     "cmk_user_sync")
 #.
 #   . Export LDAP Connections
+@exclusive_per_account('Checkmk: Export LDAP Connections')
 def export_ldap_connections(account):
     """
     Export the LDAP Connections for the Checkmk Login

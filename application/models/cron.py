@@ -233,3 +233,17 @@ class CronStats(db.Document):
     meta = {
         'strict' : False
     }
+
+
+class RunLock(db.Document):
+    """
+    One running export per job and account (see
+    ``application.helpers.run_lock``). The document exists while the run
+    holds the lock.
+    """
+    name = db.StringField(required=True, unique=True)
+    pid = db.IntField()
+    hostname = db.StringField()
+    started = db.DateTimeField()
+
+    meta = {'strict': False}

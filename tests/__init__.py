@@ -515,6 +515,7 @@ class _CronGroup:  # pylint: disable=too-few-public-methods
 
 _models_cron.CronStats = _CronStats
 _models_cron.CronGroup = _CronGroup
+_models_cron.RunLock = MagicMock(name="stub.RunLock")  # every run gets its lock
 
 _log_models = _stub_package("application.modules.log.models")
 
@@ -643,11 +644,10 @@ _load_real_module(
     "application.helpers.shadow_data",
     os.path.join("helpers", "shadow_data.py"),
 )
-# Reports failed jobs to cron, needs nothing at all.
-_load_real_module(
-    "application.helpers.task_status",
-    os.path.join("helpers", "task_status.py"),
-)
+# Report failed jobs to cron and keep one export run per account.
+for _helper in ('task_status', 'run_lock'):
+    _load_real_module(f"application.helpers.{_helper}",
+                      os.path.join("helpers", f"{_helper}.py"))
 
 # application.modules.plugin pulls in render_jinja at import time, so the
 # helpers.syncer_jinja stub must be in place before the real plugin module
