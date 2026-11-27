@@ -19,6 +19,7 @@ from application.plugins.checkmk.cmk2 import CmkException, CmkTimeout
 from application.plugins.checkmk.cmk_rules import (
     clean_postproccessed,
     deep_compare,
+    describe_condition,
     analyze_value_differences,
     preview_rule_for_attributes,
     preview_group_rule_for_attributes,
@@ -1243,6 +1244,63 @@ class TestRuleMoveePlanning(unittest.TestCase):
                    _FakeCleanProgress()), patch('builtins.print'):
             self.sync.sort_rules()
         self.assertEqual(self.sync.request.call_count, 2)
+
+
+class TestExportOutput(unittest.TestCase):
+    """The export prints short lines and one closing summary."""
+
+    def test_condition_summary_names_the_first_hosts(self):
+        condition = {
+            'host_tags': [{'key': 'a'}],
+            'host_label_groups': [{'operator': 'and', 'label_group': [
+                {'operator': 'and', 'label': 'os:linux'}]}],
+            'host_name': {'match_on': ['srv01', 'srv02', 'srv03', 'srv04'],
+                          'operator': 'one_of'},
+            'service_description': {'match_on': ['CPU'], 'operator': 'none_of'},
+        }
+        self.assertEqual(
+            describe_condition(condition),
+            'hosts: srv01, srv02, srv03 (+1); services not: CPU; '
+            'host labels: os:linux; 1 host tag(s)')
+
+    def test_empty_condition(self):
+        self.assertEqual(describe_condition({'host_tags': []}), 'no condition')
+
+    def _sync(self, rules):
+        sync = make_checkmk_rule_sync()
+        sync.account_id = 'acc'
+        sync.debug = False
+        sync.dry_run = False
+        sync.log_details = []
+        sync.log_error = MagicMock()
+        sync.rulsets_by_type = rules
+        sync.request = MagicMock(return_value=({'id': 'new'}, {}))
+        return sync
+
+    @staticmethod
+    def _run(callback):
+        out = io.StringIO()
+        with patch('application.plugins.checkmk.cmk_rules.make_progress',
+                   _FakeCleanProgress()), redirect_stdout(out):
+            callback()
+        return out.getvalue()
+
+    def test_only_the_missing_rules_are_created_and_counted(self):
+        rule = {'folder': '/', 'comment': 'c', 'value': '1',
+                'condition': {'host_name': {'match_on': ['srv01'],
+                                            'operator': 'one_of'}}}
+        sync = self._sync({'r1': [dict(rule, _skip_create=True), dict(rule)]})
+        output = self._run(sync.create_rules)
+        self.assertEqual(sync.request.call_count, 1)
+        self.assertIn('CREATE Rule in r1 (hosts: srv01)', output)
+        output = self._run(sync._report_changes)
+        self.assertIn('Done: 2 rules in 1 rulesets, 1 created', output)
+
+    def test_nothing_to_create(self):
+        sync = self._sync({'r1': [{'_skip_create': True}]})
+        self.assertIn('Nothing to create', self._run(sync.create_rules))
+        sync.request.assert_not_called()
+        self.assertIn('no changes', self._run(sync._report_changes))
 
 
 class TestUnparsableRuleValue(unittest.TestCase):

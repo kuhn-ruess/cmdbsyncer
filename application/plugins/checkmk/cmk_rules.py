@@ -184,6 +184,46 @@ def shorten_value(value, limit=120):
     return value
 
 
+def _head(names, limit):
+    """The first ``limit`` names, with the number of the others."""
+    names = [str(name) for name in names]
+    text = ', '.join(names[:limit])
+    if len(names) > limit:
+        text += f' (+{len(names) - limit})'
+    return text
+
+
+def _condition_labels(groups):
+    """The labels of Checkmk label groups as a flat list."""
+    return [entry.get('label') for group in groups or []
+            for entry in (group.get('label_group') or [])
+            if isinstance(entry, dict) and entry.get('label')]
+
+
+def describe_condition(condition, limit=3):
+    """
+    Short one-line summary of a rule condition for the export output: the
+    first hosts and services, labels and the number of host tags. The full
+    condition is printed with --debug.
+    """
+    condition = condition or {}
+    parts = []
+    for key, caption in (('host_name', 'hosts'),
+                         ('service_description', 'services')):
+        entry = condition.get(key)
+        if isinstance(entry, dict) and entry.get('match_on'):
+            negate = ' not' if entry.get('operator') == 'none_of' else ''
+            parts.append(f"{caption}{negate}: {_head(entry['match_on'], limit)}")
+    for key, caption in (('host_label_groups', 'host labels'),
+                         ('service_label_groups', 'service labels')):
+        labels = _condition_labels(condition.get(key))
+        if labels:
+            parts.append(f"{caption}: {_head(labels, limit)}")
+    if condition.get('host_tags'):
+        parts.append(f"{len(condition['host_tags'])} host tag(s)")
+    return '; '.join(parts) or 'no condition'
+
+
 def findings_for_storage(results):
     """
     The findings as plain documents the web interface can render and
@@ -1030,6 +1070,8 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         # Checkmk error). Their create step is skipped as well: without
         # knowing what is already there, creating would duplicate rules.
         self._failed_rulesets = set()
+        # What the run changed in Checkmk, printed as the last line.
+        self._changes = Counter()
         # Host-independent rules, wired in by inits.export_rules. Evaluated
         # once in calculate_static_rules instead of per host.
         self.static_rules = []
@@ -1662,6 +1704,18 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         self.sort_rules()
         if self.dry_run:
             self._report_dry_run()
+        else:
+            self._report_changes()
+
+    def _report_changes(self):
+        """One closing line: how many rules the run sent and what changed."""
+        total = sum(len(r) for r in self.rulsets_by_type.values())
+        changes = ', '.join(f"{self._changes[key]} {key}"
+                            for key in ('created', 'updated', 'deleted')
+                            if self._changes[key])
+        print(f"{CC.OKGREEN} -- {CC.ENDC} Done: {total} rules in "
+              f"{len(self.rulsets_by_type)} rulesets, "
+              f"{changes or 'no changes'}")
 
     def _create_condition_hosts(self):
         """
@@ -2774,77 +2828,71 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         """
         Create needed Rules in Checkmk
         """
+        # Cleanup could not read a failed ruleset, so no rule in it carries
+        # a _skip_create marker: creating now would duplicate every rule
+        # that already exists there.
+        pending = [(ruleset_name, rule)
+                   for ruleset_name, rules in self.rulsets_by_type.items()
+                   if ruleset_name not in self._failed_rulesets
+                   for rule in rules if not rule.get('_skip_create')]
         print(f"{CC.OKGREEN} -- {CC.ENDC} Create new Rules")
+        if not pending:
+            print(f"{CC.OKGREEN}  ** {CC.ENDC}Nothing to create")
+            return
         with make_progress() as progress:
-
-            total_rules = sum(len(r) for r in self.rulsets_by_type.values())
-            task1 = progress.add_task(
-                f"Create across {len(self.rulsets_by_type)} rulesets ({total_rules} rules)",
-                total=len(self.rulsets_by_type),
-            )
-            for ruleset_name, rules in self.rulsets_by_type.items():
-                if ruleset_name in self._failed_rulesets:
-                    # Cleanup could not read this ruleset, so no rule in it
-                    # carries a _skip_create marker — creating now would
-                    # duplicate every rule that already exists there.
-                    progress.advance(task1)
-                    continue
-                for rule in rules:
-                    template = {
-                        "ruleset": f"{ruleset_name}",
-                        "folder": rule['folder'],
-                        "properties": {
-                            "disabled": False,
-                            "description": rule.get('description')
-                                           or self.rule_marker,
-                            "comment": rule['comment'],
-                        },
-                        'conditions' : rule['condition'],
-                        'value_raw' : rule['value'],
-                    }
-
-
-                    if rule.get('_skip_create'):
-                        # ``clean_rules`` already paired this entry with
-                        # an existing Checkmk rule (full match or in-
-                        # place update). No POST needed; the captured
-                        # ``_cmk_id`` is what ``sort_rules`` will move.
-                        continue
-                    if self.dry_run:
-                        self._plan('CREATE', f"a rule in {ruleset_name}",
-                                   f"folder: {rule['folder']}",
-                                   f"condition: {rule['condition']}",
-                                   f"value: {rule['value']}")
-                        continue
-                    print(f"{CC.OKBLUE} *{CC.ENDC} Create Rule in {ruleset_name} " \
-                          f"({rule['condition']})")
-                    url = "domain-types/rule/collections/all"
-                    try:
-                        response = self.request(url, data=template, method="POST")
-                        # Checkmk returns the freshly created rule's
-                        # JSON body; pin its id on the local entry so
-                        # ``sort_rules`` can chain after_specific_rule
-                        # moves without round-tripping a GET + content
-                        # match (which is ambiguous when multiple
-                        # outcomes share conditions+value).
-                        try:
-                            rule['_cmk_id'] = response[0].get('id')
-                        except (TypeError, IndexError, AttributeError):
-                            rule['_cmk_id'] = None
-                        if rule.get('_cmk_id'):
-                            self._created_order_by_ruleset.setdefault(
-                                ruleset_name, []).append(rule['_cmk_id'])
-                        self.log_details.append(("INFO",
-                                              f"Created Rule in {ruleset_name}: {rule['value']}"))
-                    except CmkException as error:
-                        # log_error prints the reason on the CLI; the full
-                        # request template only goes into the log detail to
-                        # keep the terminal output readable.
-                        self.log_error(
-                            f"Could not create Rule in {ruleset_name}: {error}")
-                        self.log_details.append(
-                            ("ERROR_DETAIL", f"Failed template: {template}"))
+            task1 = progress.add_task("Create rules", total=len(pending))
+            for ruleset_name, rule in pending:
+                self._create_rule(ruleset_name, rule)
                 progress.advance(task1)
+
+    def _create_rule(self, ruleset_name, rule):
+        """POST one generated rule to Checkmk, or plan it on a dry run."""
+        if self.dry_run:
+            self._plan('CREATE', f"a rule in {ruleset_name}",
+                       f"folder: {rule['folder']}",
+                       f"condition: {rule['condition']}",
+                       f"value: {rule['value']}")
+            return
+        template = {
+            "ruleset": f"{ruleset_name}",
+            "folder": rule['folder'],
+            "properties": {
+                "disabled": False,
+                "description": rule.get('description') or self.rule_marker,
+                "comment": rule['comment'],
+            },
+            'conditions': rule['condition'],
+            'value_raw': rule['value'],
+        }
+        print(f"{CC.OKBLUE} *{CC.ENDC} CREATE Rule in {ruleset_name} "
+              f"({describe_condition(rule['condition'])})")
+        if self.debug:
+            print(f"{CC.OKCYAN}   condition: {rule['condition']}{CC.ENDC}")
+        url = "domain-types/rule/collections/all"
+        try:
+            response = self.request(url, data=template, method="POST")
+        except CmkException as error:
+            # log_error prints the reason on the CLI; the full request
+            # template only goes into the log detail to keep the terminal
+            # output readable.
+            self.log_error(f"Could not create Rule in {ruleset_name}: {error}")
+            self.log_details.append(
+                ("ERROR_DETAIL", f"Failed template: {template}"))
+            return
+        self._changes['created'] += 1
+        # Checkmk returns the freshly created rule's JSON body; pin its id
+        # on the local entry so ``sort_rules`` can chain after_specific_rule
+        # moves without round-tripping a GET + content match (which is
+        # ambiguous when multiple outcomes share conditions+value).
+        try:
+            rule['_cmk_id'] = response[0].get('id')
+        except (TypeError, IndexError, AttributeError):
+            rule['_cmk_id'] = None
+        if rule.get('_cmk_id'):
+            self._created_order_by_ruleset.setdefault(
+                ruleset_name, []).append(rule['_cmk_id'])
+        self.log_details.append(
+            ("INFO", f"Created Rule in {ruleset_name}: {rule['value']}"))
 
 
     @staticmethod
@@ -2934,6 +2982,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
             self.update_rule(rule_id, payload)
             print(f"{CC.OKBLUE} *{CC.ENDC} UPDATE description of Rule in "
                   f"{ruleset_name} {rule_id}")
+            self._changes['updated'] += 1
             self.log_details.append((
                 "INFO",
                 f"Updated description of Rule in {ruleset_name} {rule_id}: "
@@ -3067,15 +3116,16 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         """
         Clean not longer needed Rules from Checkmk
         """
-        print(f"{CC.OKGREEN} -- {CC.ENDC} Compare with Checkmk, changes are listed: "
-              f"{', '.join(sorted(self.rulsets_by_type))}")
+        total_rules = sum(len(r) for r in self.rulsets_by_type.values())
+        print(f"{CC.OKGREEN} -- {CC.ENDC} Compare {total_rules} rules in "
+              f"{len(self.rulsets_by_type)} rulesets with Checkmk, "
+              "changes are listed")
+        if self.debug:
+            print(f"{CC.OKCYAN}   rulesets: "
+                  f"{', '.join(sorted(self.rulsets_by_type))}{CC.ENDC}")
         with make_progress() as progress:
-
-            total_rules = sum(len(r) for r in self.rulsets_by_type.values())
-            task1 = progress.add_task(
-                f"Compare {len(self.rulsets_by_type)} rulesets ({total_rules} rules)",
-                total=len(self.rulsets_by_type),
-            )
+            task1 = progress.add_task("Compare rulesets",
+                                      total=len(self.rulsets_by_type))
             delete_reasons = {}
             for ruleset_name, rules in self.rulsets_by_type.items():
                 url = f"domain-types/rule/collections/all?ruleset_name={ruleset_name}"
@@ -3236,6 +3286,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                             self.update_rule(rule_id, update_payload)
                             print(f"{CC.OKBLUE} *{CC.ENDC} UPDATE Rule in "
                                   f"{ruleset_name} {rule_id}")
+                            self._changes['updated'] += 1
                             our_rule['_cmk_id'] = rule_id
                             our_rule['_skip_create'] = True
                             rule_found = True
@@ -3292,6 +3343,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                             print(f"{CC.OKBLUE} *{CC.ENDC} UPDATE host list of "
                                   f"Rule in {ruleset_name} {rule_id} "
                                   f"({len(cmk_hosts)} -> {len(our_hosts)} hosts)")
+                            self._changes['updated'] += 1
                             our_rule['_cmk_id'] = rule_id
                             our_rule['_skip_create'] = True
                             rule_found = True
@@ -3368,8 +3420,10 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                             f"({reason}): {reason_detail}"))
 
                         # Show details only for potentially problematic cases
+                        # (shortened, the log keeps all of it).
                         if deletion_details:
-                            print(f"{CC.WARNING}   {deletion_details}{CC.ENDC}")
+                            print(f"{CC.WARNING}   "
+                                  f"{shorten_value(deletion_details)}{CC.ENDC}")
 
                         url = f'/objects/rule/{rule_id}'
                         try:
@@ -3380,6 +3434,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                                 f"{ruleset_name}: {error}")
                             continue
 
+                        self._changes['deleted'] += 1
                         # Log with details if it's a potential flapping rule
                         log_entry = f"Deleted Rule in {ruleset_name} {rule_id}"
                         if deletion_details:
@@ -3462,6 +3517,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                         f"Could not delete orphaned Rule {rule_id} in "
                         f"{ruleset_name}: {error}")
                     continue
+                self._changes['deleted'] += 1
                 self.log_details.append((
                     "INFO",
                     f"Deleted orphaned Rule in {ruleset_name} {rule_id}"))
