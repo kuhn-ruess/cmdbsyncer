@@ -202,7 +202,11 @@ with app.test_request_context():
     eq(without_cron(Account.objects.get(name='export')), False, 'account in a cron job')
     eq(without_cron(Account.objects.get(name='csv_add')), True, 'role, no cron job')
     eq(without_cron(Account.objects.get(name='csv_none')), False, 'no role')
+Account(name='filtered', type='csv', plugin_settings=[
+    PluginSettings(plugin='Checkmk: Export Hosts', object_filter=['host', 'service'])]).save()
 listing = check('/admin/account/', 200).get_data(as_text=True)
+if 'host, service' not in listing:
+    fail('account list without the object filter of the plugin settings')
 if 'In no cron job' not in listing or '"no_cron": true' not in listing:
     fail('account list without the hint for accounts in no cron job')
 for marker in ('"jdisc_own"', 'Add child account', f'data-id="{jdisc.id}"'):

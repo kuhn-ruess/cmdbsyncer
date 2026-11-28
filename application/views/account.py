@@ -329,7 +329,8 @@ def _render_plugin_data(_view, _context, model, _name):
     """
     Render for Plugin Settings
     """
-    return Markup(_kv_table((x.plugin, x.object_filter) for x in model.plugin_settings))
+    return Markup(_kv_table((x.plugin, ', '.join(x.object_filter or []))
+                            for x in model.plugin_settings))
 
 def _render_type(_view, _context, model, _name):
     """
