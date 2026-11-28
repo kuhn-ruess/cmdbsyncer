@@ -1,0 +1,59 @@
+{# Filter blocks of a Checkmk notification rule outcome.
+
+   The filters sit in <details> blocks (see _NOTIFICATION_OUTCOME_RULES).
+   A block opens on load when one of its filters holds a value or an
+   error, so a saved rule shows what it filters on and the rest stays
+   folded. #}
+<style>
+details.nrule-filters {
+  margin: 8px 0;
+  border: 1px solid var(--surface-border, #d7dbe0);
+  border-radius: 6px;
+  background: var(--surface-bg, #fff);
+  color: var(--surface-text, #2c3e50);
+}
+details.nrule-filters > summary {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+details.nrule-filters > summary small {
+  margin-left: 6px;
+  font-weight: normal;
+  color: var(--surface-muted, #6c757d);
+}
+details.nrule-filters[open] > summary {
+  border-bottom: 1px solid var(--surface-divider, #eef0f3);
+}
+details.nrule-filters > .form-group {
+  padding: 0 10px;
+}
+details.nrule-filters > .form-group:first-of-type {
+  margin-top: 8px;
+}
+</style>
+
+<script>
+(function () {
+  "use strict";
+
+  function holdsValue(block) {
+    if (block.querySelector(".is-invalid, .invalid-feedback, .has-error")) {
+      return true;
+    }
+    return Array.prototype.some.call(
+      block.querySelectorAll("input, select, textarea"), function (input) {
+        if (input.type === "checkbox" || input.type === "radio") {
+          return input.checked;
+        }
+        return (input.value || "").trim() !== "";
+      });
+  }
+
+  document.querySelectorAll("details.nrule-filters").forEach(function (block) {
+    if (holdsValue(block)) {
+      block.open = true;
+    }
+  });
+})();
+</script>

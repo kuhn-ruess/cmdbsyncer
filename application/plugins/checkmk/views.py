@@ -2599,7 +2599,7 @@ _NOTIFICATION_LIST_LABELS = [
     ('match_check_types', 'Filter Check Types'),
     ('match_plugin_output', 'Filter Plugin Output'),
     ('match_only_during_time_period', 'Filter Time Period'),
-    ('match_service_levels', 'Filter Service Levels'),
+    ('match_service_levels', 'Filter Service Levels (host or service)'),
     ('match_contacts', 'Filter Contacts'),
 ]
 
@@ -2627,9 +2627,50 @@ _NOTIFICATION_PLACEHOLDERS = {
     'match_check_types': 'Comma-separated check plugin names, Jinja',
     'match_plugin_output': 'Regex against service plugin output, Jinja',
     'match_only_during_time_period': 'Single time period name, Jinja',
-    'match_service_levels': 'Range "min,max" (numeric), Jinja',
     'match_contacts': 'Comma-separated user IDs, Jinja',
 }
+
+
+def _filter_block(title, fields):
+    """
+    One collapsible block of filters in a notification rule outcome. The
+    summary line names its filters, so a folded one is still found.
+    """
+    labels = {**dict(_NOTIFICATION_LIST_LABELS),
+              'match_host_event_types': 'Host Event Types',
+              'match_service_event_types': 'Service Event Types'}
+    names = ', '.join(labels.get(field, field).removeprefix('Filter ')
+                      for field in fields)
+    return [rules.HTML(f'<details class="nrule-filters"><summary>{escape(title)}'
+                       f' <small>{escape(names)}</small></summary>'),
+            *(rules.Field(field) for field in fields),
+            rules.HTML('</details>')]
+
+
+# The outcome form: what to send and to whom first, then the filters in
+# blocks. A block that holds a value opens on load (see
+# _notification_filter_blocks.html).
+_NOTIFICATION_OUTCOME_RULES = [
+    rules.Field('notification_method'),
+    rules.Field('notification_parameters'),
+    rules.Field('contact_group_recipients'),
+    rules.Field('multiply_by_list'),
+    rules.Field('multiply_list'),
+    *_filter_block('Event Types and Service Levels', (
+        'match_host_event_types', 'match_service_event_types',
+        'match_service_levels')),
+    *_filter_block('Hosts', (
+        'match_sites', 'match_folder', 'match_hosts', 'match_exclude_hosts',
+        'match_host_groups', 'match_host_labels', 'match_host_tags')),
+    *_filter_block('Services', (
+        'match_services', 'match_exclude_services', 'match_service_groups',
+        'match_service_labels', 'match_check_types',
+        'match_plugin_output')),
+    *_filter_block('Contacts and Time', (
+        'match_contact_groups', 'match_contacts',
+        'match_only_during_time_period')),
+    rules.Field('disable_rule'),
+]
 
 
 def _render_notification_rule(_view, _context, model, _name):
@@ -2743,6 +2784,55 @@ class _CheckboxMultiWidget:
 
 class _CheckboxMultiField(SelectMultipleField):
     widget = _CheckboxMultiWidget()
+
+
+class _ServiceLevelRangeWidget:
+    """
+    Two number inputs, From and To, for the service level condition.
+    The levels are whatever the Checkmk site defines, so they are typed in.
+    """
+    # pylint: disable=too-few-public-methods
+
+    def __call__(self, field, **_kwargs):
+        parts = [part.strip() for part in (field.data or '').split(',')]
+        stored = (parts + ['', ''])[:2]
+        inputs = [
+            f'<span>{side}</span>'
+            f'<input type="number" step="1" class="form-control" '
+            f'style="width:8em" name="{field.name}" id="{field.id}-{side}" '
+            f'value="{escape(value)}" placeholder="e.g. {example}">'
+            for side, value, example in (('from', stored[0], 10),
+                                         ('to', stored[1], 30))]
+        return Markup(
+            '<div style="display:flex;align-items:center;gap:8px">'
+            f'{"".join(inputs)}</div>')
+
+
+class _ServiceLevelRangeField(StringField):
+    """
+    Service level condition, stored as "from,to" like before, so the
+    export and existing rules stay as they are.
+    """
+    widget = _ServiceLevelRangeWidget()
+
+    def process_formdata(self, valuelist):
+        # Both selects post under the field name, From first.
+        if len(valuelist) == 2:
+            low, high = (value.strip() for value in valuelist)
+            valuelist = [f'{low},{high}' if low or high else '']
+        super().process_formdata(valuelist)
+
+    def pre_validate(self, form):
+        if not self.data:
+            return
+        try:
+            low, high = (int(part) for part in self.data.split(','))
+        except ValueError as error:
+            raise ValidationError(
+                'Choose both a From and a To service level.') from error
+        if low > high:
+            raise ValidationError(
+                'The From service level must not be above the To level.')
 
 
 def _host_event_select(*args, **kwargs):
@@ -2890,6 +2980,7 @@ class CheckmkNotificationRuleView(ListSourceViewMixin, RuleModelView):  # pylint
         match_field_overrides['multiply_list'] = StringField
         match_field_overrides['notification_parameters'] = StringField
         match_field_overrides['notification_method'] = _StringFieldWithDatalist
+        match_field_overrides['match_service_levels'] = _ServiceLevelRangeField
         # Multi-select with human-readable labels for the event-type
         # ListFields. wtforms posts a plain list of API-flag strings.
         match_field_overrides['match_host_event_types'] = _host_event_select
@@ -2925,6 +3016,12 @@ class CheckmkNotificationRuleView(ListSourceViewMixin, RuleModelView):  # pylint
             'description': 'Jinja rendering to a list, e.g. '
                            "{{get_list(anwendung_kontaktgruppe)|safe}}",
         }
+        form_args['match_service_levels'] = {
+            'label': 'Filter Service Levels (host or service)',
+            'description': 'The numbers of the levels defined in Checkmk '
+                           '(Global settings, Service Levels), e.g. 10 to 30. '
+                           'Leave both empty for no condition.',
+        }
         form_args['match_host_event_types'] = {'label': 'Filter Host Event Types'}
         form_args['match_service_event_types'] = {'label': 'Filter Service Event Types'}
         form_args['disable_rule'] = {'label': 'Disable Rule'}
@@ -2934,6 +3031,7 @@ class CheckmkNotificationRuleView(ListSourceViewMixin, RuleModelView):  # pylint
                     '': {
                         'form_overrides': match_field_overrides,
                         'form_args': form_args,
+                        'form_rules': _NOTIFICATION_OUTCOME_RULES,
                         'form_widget_args': {
                             **{
                                 field: {'placeholder': hint + _NOTIFICATION_LOOP_HINT}
